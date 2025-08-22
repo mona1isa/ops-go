@@ -13,6 +13,7 @@ type SysUserController struct {
 	controllers.BaseController
 }
 
+// AddUserHandler 添加用户
 func (u *SysUserController) AddUserHandler(c *gin.Context) {
 	userRequest := request.UserRequest{}
 	if err := c.ShouldBindJSON(&userRequest); err != nil {
@@ -28,5 +29,58 @@ func (u *SysUserController) AddUserHandler(c *gin.Context) {
 	if err := userService.AddUser(userRequest); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
-	c.JSONP(http.StatusOK, gin.H{"status": "ok"})
+	result := map[string]any{
+		"code": 200,
+		"msg":  "success",
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// EditUserHandler 编辑用户
+func (*SysUserController) EditUserHandler(c *gin.Context) {
+	userRequest := request.EditUserRequest{}
+	if err := c.ShouldBindJSON(&userRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+
+	clientIp := c.Request.Header.Get("X-Forwarded-For")
+	userRequest.LoginIP = clientIp
+	userRequest.LoginDate = time.Now()
+
+	service := system.UserService{}
+	if err := service.EditUser(userRequest); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	result := map[string]any{
+		"code": 200,
+		"msg":  "success",
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (*SysUserController) All(c *gin.Context) {
+	service := system.UserService{}
+	all, err := service.All()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	result := map[string]any{
+		"code": 200,
+		"msg":  "success",
+		"data": all,
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (*SysUserController) Delete(c *gin.Context) {
+	service := system.UserService{}
+	id := c.Param("id")
+	if err := service.Delete(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	result := map[string]any{
+		"code": 200,
+		"msg":  "success",
+	}
+	c.JSON(http.StatusOK, result)
 }

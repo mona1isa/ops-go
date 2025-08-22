@@ -22,7 +22,7 @@ func (w *responseWriter) Write(b []byte) (int, error) {
 }
 
 func LogMiddleware() gin.HandlerFunc {
-	sysLog := models.SysLog{}
+
 	return func(c *gin.Context) {
 		// 记录请求体（需重置读取位置）
 		reqBody, _ := c.GetRawData()
@@ -39,6 +39,7 @@ func LogMiddleware() gin.HandlerFunc {
 		start := time.Now()
 		c.Next()
 		go func() {
+			sysLog := models.SysLog{}
 			sysLog.IpAddr = c.ClientIP()
 			sysLog.RequestUri = url.RequestURI()
 			sysLog.Method = c.Request.Method
