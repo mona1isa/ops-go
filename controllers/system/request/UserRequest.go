@@ -1,0 +1,18 @@
+package request
+
+import "time"
+
+type UserRequest struct {
+	Id        uint      `json:"id"`
+	DeptId    uint      `json:"deptId" binding:"required"`
+	UserName  string    `json:"userName" binding:"required"`
+	Nickname  string    `json:"nickName"`
+	Email     string    `json:"email" binding:"email"`
+	Phone     string    `json:"phone" binding:"required"`
+	Sex       int       `json:"sex"`
+	Avatar    string    `json:"avatar"`
+	Password  string    `json:"password"`
+	Status    string    `json:"status"`
+	LoginIP   string    `json:"loginIp"`
+	LoginDate time.Time `json:"loginDate"`
+}
