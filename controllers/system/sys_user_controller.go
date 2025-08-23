@@ -13,6 +13,31 @@ type SysUserController struct {
 	controllers.BaseController
 }
 
+// LoginHandler 登录
+func (u *SysUserController) LoginHandler(c *gin.Context) {
+	loginRequest := request.LoginRequest{}
+	err := c.ShouldBindJSON(&loginRequest)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	service := system.UserService{}
+	err = service.UserLogin(loginRequest)
+	if err != nil {
+		msg := gin.H{
+			"code": http.StatusBadRequest,
+			"msg":  "密码错误",
+		}
+		c.JSON(http.StatusBadRequest, msg)
+		return
+	}
+	result := map[string]any{
+		"code": 200,
+		"msg":  "success",
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 // AddUserHandler 添加用户
 func (u *SysUserController) AddUserHandler(c *gin.Context) {
 	userRequest := request.UserRequest{}

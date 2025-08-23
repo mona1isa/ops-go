@@ -11,6 +11,7 @@ func (*UserRouter) Setup(r *gin.RouterGroup) {
 	uc := system.SysUserController{}
 	userGroup := r.Group("/user")
 	{
+		userGroup.POST("/login", uc.LoginHandler)
 		userGroup.POST("/add", uc.AddUserHandler)
 		userGroup.POST("/edit", uc.EditUserHandler)
 		userGroup.GET("/all", uc.All)
