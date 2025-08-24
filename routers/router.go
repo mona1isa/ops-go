@@ -11,6 +11,9 @@ func Init() *gin.Engine {
 
 	api := r.Group("/api")
 	userRouter := &UserRouter{}
+	captchaRouter := &CaptchaRouter{}
+
+	captchaRouter.Setup(api)
 	userRouter.Setup(api)
 	return r
 }

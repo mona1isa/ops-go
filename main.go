@@ -10,6 +10,7 @@ import (
 func main() {
 	config.LoadEnv()
 	config.InitDB()
+	config.InitRedis()
 
 	r := routers.Init()
 	err := r.Run(":" + os.Getenv("APP_PORT"))
