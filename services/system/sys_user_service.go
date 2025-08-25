@@ -28,9 +28,9 @@ func (u *UserService) UserLogin(request request.LoginRequest) (string, error) {
 	// 验证用户信息
 	username := request.Username
 	var user models.SysUser
-	dbUser := config.DB.Where("user_name = ?", username).Find(&user)
-	if dbUser.Error != nil {
-		log.Println("用户不存在：", dbUser.Error)
+	//dbUser := config.DB.Where("user_name = ?", username).Find(&user)
+	config.DB.First(&user, "user_name=?", username)
+	if user.UserName == "" && user.UserName == username {
 		return "", errors.New("用户不存在")
 	}
 
@@ -46,6 +46,11 @@ func (u *UserService) UserLogin(request request.LoginRequest) (string, error) {
 		log.Println("生成Token异常：", err)
 		return "", errors.New("生成Token异常")
 	}
+
+	// 更新用户登录信息
+	user.LoginIP = request.LoginIP
+	user.LoginDate = request.LoginDate
+	config.DB.Updates(&user)
 	return jwt, nil
 }
 
@@ -58,15 +63,13 @@ func (u *UserService) AddUser(request request.UserRequest) error {
 		return err
 	}
 	user := models.SysUser{
-		DeptId:    request.DeptId,
-		UserName:  request.UserName,
-		Email:     request.Email,
-		Phone:     request.Phone,
-		Sex:       request.Sex,
-		Avatar:    request.Avatar,
-		Status:    request.Status,
-		LoginIP:   request.LoginIP,
-		LoginDate: request.LoginDate,
+		DeptId:   request.DeptId,
+		UserName: request.UserName,
+		Email:    request.Email,
+		Phone:    request.Phone,
+		Sex:      request.Sex,
+		Avatar:   request.Avatar,
+		Status:   request.Status,
 	}
 	// 加密存储密码
 	user.Password = hashedPassword

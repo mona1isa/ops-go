@@ -21,6 +21,12 @@ func (u *SysUserController) LoginHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// 设置登录IP和时间
+	loginRequest.LoginIP = c.ClientIP()
+	now := time.Now()
+	loginRequest.LoginDate = &now
+
 	service := system.UserService{}
 	jwt, err := service.UserLogin(loginRequest)
 	if err != nil {
@@ -46,10 +52,6 @@ func (u *SysUserController) AddUserHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	clientIp := c.Request.Header.Get("X-Forwarded-For")
-	userRequest.LoginIP = clientIp
-	userRequest.LoginDate = time.Now()
 
 	userService := system.UserService{}
 	if err := userService.AddUser(userRequest); err != nil {

@@ -25,6 +25,7 @@ type CaptchaService struct {
 func (*CaptchaService) GenerateCaptcha() *Captcha {
 	// 生成uuid
 	uuidV4 := uuid.New().String()
+	uuidV4 = strings.ReplaceAll(uuidV4, "-", "")
 	// 生成验证码
 	data, err := captcha.New(280, 150)
 	if err != nil {
