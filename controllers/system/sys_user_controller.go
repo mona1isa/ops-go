@@ -22,18 +22,19 @@ func (u *SysUserController) LoginHandler(c *gin.Context) {
 		return
 	}
 	service := system.UserService{}
-	err = service.UserLogin(loginRequest)
+	jwt, err := service.UserLogin(loginRequest)
 	if err != nil {
 		msg := gin.H{
 			"code": http.StatusBadRequest,
-			"msg":  err,
+			"msg":  err.Error(),
 		}
 		c.JSON(http.StatusBadRequest, msg)
 		return
 	}
 	result := map[string]any{
-		"code": 200,
-		"msg":  "success",
+		"code":  200,
+		"msg":   "success",
+		"token": jwt,
 	}
 	c.JSON(http.StatusOK, result)
 }

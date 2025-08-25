@@ -62,5 +62,10 @@ func (*CaptchaService) VerifyCaptcha(instance *Captcha) bool {
 		return false
 	}
 
-	return strings.EqualFold(instance.Text, uuidValue)
+	rs := strings.EqualFold(instance.Text, uuidValue)
+	if rs == true {
+		// 清除验证码缓存
+		_ = utils.DelCache(key)
+	}
+	return rs
 }

@@ -18,4 +18,5 @@ func main() {
 		log.Println("服务启动异常：", err)
 		return
 	}
+	log.Println("服务已成功启动.")
 }
