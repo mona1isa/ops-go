@@ -1,6 +1,7 @@
 package system
 
 import (
+	"errors"
 	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/request"
 	"github.com/zhany/ops-go/models"
@@ -12,17 +13,28 @@ type UserService struct {
 }
 
 func (u *UserService) UserLogin(request request.LoginRequest) error {
+	// 验证码校验
+	captchaService := CaptchaService{}
+	cap := Captcha{
+		Uuid: request.Uuid,
+		Text: request.Code,
+	}
+	rs := captchaService.VerifyCaptcha(&cap)
+	if !rs {
+		return errors.New("验证码错误")
+	}
+	// 验证用户信息
 	username := request.Username
 	var user models.SysUser
 	dbUser := config.DB.Where("user_name = ?", username).Find(&user)
 	if dbUser.Error != nil {
 		log.Println("用户不存在：", dbUser.Error)
-		return dbUser.Error
+		return errors.New("用户不存在")
 	}
 
 	if err := u.CheckHashPassword(request.Password, user.Password); err != nil {
 		log.Println("密码错误：", err)
-		return err
+		return errors.New("密码错误")
 	}
 	return nil
 }

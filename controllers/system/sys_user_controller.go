@@ -26,7 +26,7 @@ func (u *SysUserController) LoginHandler(c *gin.Context) {
 	if err != nil {
 		msg := gin.H{
 			"code": http.StatusBadRequest,
-			"msg":  "密码错误",
+			"msg":  err,
 		}
 		c.JSON(http.StatusBadRequest, msg)
 		return

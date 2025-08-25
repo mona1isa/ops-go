@@ -2,8 +2,8 @@ package config
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"github.com/zhany/ops-go/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -39,7 +39,7 @@ func InitRedis() {
 	redisDB, _ := strconv.Atoi(os.Getenv("REDIS_DB"))
 	redisPoolSize, _ := strconv.Atoi(os.Getenv("REDIS_POOL_SIZE"))
 	minIdleConn, _ := strconv.Atoi(os.Getenv("REDIS_MIN_IDLE_CONN"))
-	RedisClient := redis.NewClient(&redis.Options{
+	client := redis.NewClient(&redis.Options{
 		Addr:         os.Getenv("REDIS_ADDRESS"), // Redis地址
 		Password:     os.Getenv("REDIS_PASSWORD"),
 		DB:           redisDB, // 默认数据库
@@ -47,8 +47,9 @@ func InitRedis() {
 		MinIdleConns: minIdleConn,
 	})
 	// 测试连接性
-	if _, err := RedisClient.Ping(ctx).Result(); err != nil {
+	if _, err := client.Ping(ctx).Result(); err != nil {
 		log.Println("Failed to connect to Redis, Err:", err)
 		return
 	}
+	RedisClient = client
 }
