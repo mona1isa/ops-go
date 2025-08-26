@@ -65,30 +65,36 @@ func (u *SysUserController) AddUserHandler(c *gin.Context) {
 }
 
 // EditUserHandler 编辑用户
-func (*SysUserController) EditUserHandler(c *gin.Context) {
+func (s *SysUserController) EditUserHandler(ctx *gin.Context) {
 	userRequest := request.EditUserRequest{}
-	if err := c.ShouldBindJSON(&userRequest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err)
 	}
 
-	clientIp := c.Request.Header.Get("X-Forwarded-For")
+	clientIp := ctx.Request.Header.Get("X-Forwarded-For")
 	userRequest.LoginIP = clientIp
 	userRequest.LoginDate = time.Now()
 
 	service := system.UserService{}
 	if err := service.EditUser(userRequest); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.Failure(ctx, http.StatusBadRequest, err)
+		return
 	}
 	result := map[string]any{
 		"code": 200,
 		"msg":  "success",
 	}
-	c.JSON(http.StatusOK, result)
+	s.Success(ctx, result)
 }
 
-func (*SysUserController) All(c *gin.Context) {
+func (s *SysUserController) Page(c *gin.Context) {
+	userRequest := request.PageUserRequest{}
+	if err := c.ShouldBindJSON(&userRequest); err != nil {
+		s.Failure(c, http.StatusBadRequest, err)
+		return
+	}
 	service := system.UserService{}
-	all, err := service.All()
+	all, err := service.Page(&userRequest)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 	"log"
 	"strconv"
 )
@@ -28,7 +29,6 @@ func (u *UserService) UserLogin(request request.LoginRequest) (string, error) {
 	// 验证用户信息
 	username := request.Username
 	var user models.SysUser
-	//dbUser := config.DB.Where("user_name = ?", username).Find(&user)
 	config.DB.First(&user, "user_name=?", username)
 	if user.UserName == "" && user.UserName == username {
 		return "", errors.New("用户不存在")
@@ -100,14 +100,21 @@ func (u *UserService) EditUser(request request.EditUserRequest) error {
 // 用户列表分页
 
 // 全部用户
-func (u *UserService) All() ([]models.SysUser, error) {
-	var user []models.SysUser
-	tx := config.DB.Find(&user)
-	if tx.Error != nil {
-		log.Println("查询用户失败：", tx.Error)
-		return nil, tx.Error
+func (u *UserService) Page(userRequest *request.PageUserRequest) (models.PageResult[models.SysUser], error) {
+	pageNum := userRequest.PageNum
+	pageSize := userRequest.PageSize
+
+	var scopes []func(db *gorm.DB) *gorm.DB
+	userNmae := userRequest.UserName
+	if userNmae != "" {
+		scopes = append(scopes, UserNameScope(userNmae))
 	}
-	return user, nil
+
+	pageResult, err := models.Paginate[models.SysUser](config.DB, pageNum, pageSize, scopes...)
+	if err != nil {
+		panic(err)
+	}
+	return pageResult, nil
 }
 
 // 删除用户
@@ -137,4 +144,10 @@ func (*UserService) CheckHashPassword(password string, hashedPassword string) er
 		return err
 	}
 	return nil
+}
+
+func UserNameScope(userName string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("user_name = ?", userName)
+	}
 }

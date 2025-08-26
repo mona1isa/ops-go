@@ -13,8 +13,10 @@ func Init() *gin.Engine {
 	api := r.Group("/api")
 	userRouter := &UserRouter{}
 	captchaRouter := &CaptchaRouter{}
+	logRouter := LogRouter{}
 
 	userRouter.Setup(api)
 	captchaRouter.Setup(api)
+	logRouter.SetUp(api)
 	return r
 }
