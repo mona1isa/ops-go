@@ -1,6 +1,7 @@
 package system
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/zhany/ops-go/controllers"
 	"github.com/zhany/ops-go/controllers/system/request"
@@ -68,23 +69,20 @@ func (u *SysUserController) AddUserHandler(c *gin.Context) {
 func (s *SysUserController) EditUserHandler(ctx *gin.Context) {
 	userRequest := request.EditUserRequest{}
 	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
-		s.Failure(ctx, http.StatusBadRequest, err)
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
 	}
-
-	clientIp := ctx.Request.Header.Get("X-Forwarded-For")
-	userRequest.LoginIP = clientIp
-	userRequest.LoginDate = time.Now()
+	if userRequest.Id <= 0 {
+		s.Failure(ctx, http.StatusBadRequest, errors.New("id is required"))
+		return
+	}
 
 	service := system.UserService{}
 	if err := service.EditUser(userRequest); err != nil {
-		s.Failure(ctx, http.StatusBadRequest, err)
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
-	result := map[string]any{
-		"code": 200,
-		"msg":  "success",
-	}
-	s.Success(ctx, result)
+	s.JustSuccess(ctx)
 }
 
 func (s *SysUserController) Page(c *gin.Context) {

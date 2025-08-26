@@ -22,6 +22,13 @@ type PageData struct {
 	PageSize  int   `json:"pageSize"`  //	每页大小
 }
 
+func (b *BaseController) JustSuccess(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{
+		"code": http.StatusOK,
+		"msg":  "success",
+	})
+}
+
 func (b *BaseController) Success(ctx *gin.Context, data any) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"code": http.StatusOK,
@@ -34,7 +41,6 @@ func (b *BaseController) Failure(ctx *gin.Context, code int, msg any) {
 	ctx.JSON(code, gin.H{
 		"code": code,
 		"msg":  msg,
-		"data": nil,
 	})
 }
 

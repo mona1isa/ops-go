@@ -2,6 +2,7 @@ package system
 
 import (
 	"errors"
+	"fmt"
 	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/request"
 	"github.com/zhany/ops-go/middleware"
@@ -65,6 +66,7 @@ func (u *UserService) AddUser(request request.UserRequest) error {
 	user := models.SysUser{
 		DeptId:   request.DeptId,
 		UserName: request.UserName,
+		NickName: request.Nickname,
 		Email:    request.Email,
 		Phone:    request.Phone,
 		Sex:      request.Sex,
@@ -83,23 +85,32 @@ func (u *UserService) AddUser(request request.UserRequest) error {
 // EditUser 编辑用户
 func (u *UserService) EditUser(request request.EditUserRequest) error {
 	id := request.Id
+	var count int64
 	user := models.SysUser{}
-	find := config.DB.Where("id = ?", id).Find(&user)
-	if find.Error != nil {
+	config.DB.Model(&user).Where("id = ?", id).Count(&count)
+	if count == 0 {
 		log.Println("用户不存在，ID: ", id)
-		return find.Error
+		return errors.New("用户不存在")
 	}
-	tx := config.DB.Model(&models.SysUser{}).Where("id = ?", id).Updates(request)
-	if tx.Error != nil {
-		log.Println("更新用户失败：", tx.Error)
-		return tx.Error
+	result := config.DB.Model(&models.SysUser{}).Where("id = ?", id).Updates(models.SysUser{
+		DeptId:   request.DeptId,
+		UserName: request.UserName,
+		NickName: request.Nickname,
+		Email:    request.Email,
+		Phone:    request.Phone,
+		Sex:      request.Sex,
+		Avatar:   request.Avatar,
+		Status:   request.Status,
+	})
+	if result.RowsAffected == 0 {
+		log.Println("更新用户失败：", result.Error)
+		errInfo := fmt.Sprintf("更新用户失败：%s", result.Error)
+		return errors.New(errInfo)
 	}
 	return nil
 }
 
-// 用户列表分页
-
-// 全部用户
+// Page 用户列表分页
 func (u *UserService) Page(userRequest *request.PageUserRequest) (models.PageResult[models.SysUser], error) {
 	pageNum := userRequest.PageNum
 	pageSize := userRequest.PageSize
@@ -117,12 +128,12 @@ func (u *UserService) Page(userRequest *request.PageUserRequest) (models.PageRes
 	return pageResult, nil
 }
 
-// 删除用户
+// Delete 删除用户
 func (*UserService) Delete(id string) error {
 	tx := config.DB.Delete(&models.SysUser{}, id)
 	if tx.Error != nil {
 		log.Println("删除用户失败：", tx.Error)
-		return tx.Error
+		return errors.New("删除用户失败")
 	}
 	return nil
 }
@@ -132,7 +143,7 @@ func (*UserService) HashPassword(password string) (string, error) {
 	fromPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Println("密码加密失败：", err)
-		return "", err
+		return "", errors.New("密码加密失败")
 	}
 	return string(fromPassword), nil
 }
@@ -141,7 +152,7 @@ func (*UserService) CheckHashPassword(password string, hashedPassword string) er
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		log.Println("密码校验失败：", err)
-		return err
+		return errors.New("密码校验失败")
 	}
 	return nil
 }
