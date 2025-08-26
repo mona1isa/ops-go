@@ -29,12 +29,34 @@ func (s *SysRoleController) Add(ctx *gin.Context) {
 
 // Edit 编辑角色
 func (s *SysRoleController) Edit(ctx *gin.Context) {
-
+	editRoleRequest := request.EditRoleRequest{}
+	if err := ctx.ShouldBindJSON(&editRoleRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := system.RoleService{}
+	if err := service.Edit(&editRoleRequest); err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
 }
 
 // Page 分页查询角色
 func (s *SysRoleController) Page(ctx *gin.Context) {
+	pageRoleRequest := request.PageRoleRequest{}
+	if err := ctx.ShouldBindJSON(&pageRoleRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
 
+	service := system.RoleService{}
+	page, err := service.Page(&pageRoleRequest)
+	if err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.PageSuccess(ctx, page.Data, page.Total, page.TotalPage, pageRoleRequest.PageNum, pageRoleRequest.PageSize)
 }
 
 // Remove 删除角色
