@@ -29,7 +29,7 @@ func InitDB() {
 		log.Println("Failed to connect to database, Err:", err)
 	}
 	// 自动执行表迁移操作
-	if err = db.AutoMigrate(&models.SysUser{}, &models.SysLog{}); err != nil {
+	if err = db.AutoMigrate(&models.SysUser{}, &models.SysLog{}, &models.SysRole{}); err != nil {
 		log.Println("Failed to auto migrate DB, Err:", err)
 	}
 	DB = db
