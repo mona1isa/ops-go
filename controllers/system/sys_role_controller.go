@@ -6,6 +6,7 @@ import (
 	"github.com/zhany/ops-go/controllers/system/request"
 	"github.com/zhany/ops-go/services/system"
 	"net/http"
+	"strconv"
 )
 
 type SysRoleController struct {
@@ -61,5 +62,12 @@ func (s *SysRoleController) Page(ctx *gin.Context) {
 
 // Remove 删除角色
 func (s *SysRoleController) Remove(ctx *gin.Context) {
-
+	roleId := ctx.Param("id")
+	id, _ := strconv.Atoi(roleId)
+	service := system.RoleService{}
+	if err := service.Remove(id); err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
 }

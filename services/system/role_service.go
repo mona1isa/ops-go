@@ -36,6 +36,23 @@ func (r *RoleService) Add(request *request.RoleRequest) error {
 
 // Edit 编辑角色
 func (r *RoleService) Edit(request *request.EditRoleRequest) error {
+	id := request.Id
+	var count int64
+	config.DB.Model(&models.SysRole{}).Where("id = ?", id).Count(&count)
+	if count == 0 {
+		return errors.New("角色不存在")
+	}
+	// 编辑角色
+	role := &models.SysRole{
+		Name:     request.Name,
+		OrderNum: request.OrderNum,
+		Status:   request.Status,
+	}
+	role.Remark = request.Remark
+	if err := config.DB.Model(&models.SysRole{}).Where("id = ?", id).Updates(role).Error; err != nil {
+		log.Println("编辑角色失败：", err.Error())
+		return errors.New("编辑角色失败：" + err.Error())
+	}
 	return nil
 }
 
@@ -64,6 +81,9 @@ func (r *RoleService) Page(roleRequest *request.PageRoleRequest) (models.PageRes
 }
 
 // Remove 删除角色
-func (r *RoleService) Remove(roleRequest *request.RoleRequest) error {
+func (r *RoleService) Remove(id int) error {
+	if err := config.DB.Delete(&models.SysRole{}, id).Error; err != nil {
+		return errors.New("角色删除失败: " + err.Error())
+	}
 	return nil
 }
