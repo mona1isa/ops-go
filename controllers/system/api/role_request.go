@@ -1,4 +1,4 @@
-package request
+package api
 
 import "github.com/zhany/ops-go/controllers"
 

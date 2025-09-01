@@ -6,7 +6,7 @@ import (
 )
 
 type Base struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID        int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 	CreateBy  string    `gorm:"type:varchar(32);comment:创建人ID" json:"createBy"`

@@ -3,7 +3,7 @@ package system
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/zhany/ops-go/controllers"
-	"github.com/zhany/ops-go/controllers/system/request"
+	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/services/system"
 	"net/http"
 )
@@ -14,7 +14,7 @@ type SystemLogController struct {
 
 // List 日志列表
 func (c *SystemLogController) List(ctx *gin.Context) {
-	logRequest := request.LogRequest{}
+	logRequest := api.LogRequest{}
 	if err := ctx.ShouldBindJSON(&logRequest); err != nil {
 		c.Failure(ctx, http.StatusBadRequest, err)
 		return

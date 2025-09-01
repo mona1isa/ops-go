@@ -3,7 +3,7 @@ package system
 import (
 	"errors"
 	"github.com/zhany/ops-go/config"
-	"github.com/zhany/ops-go/controllers/system/request"
+	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
 	"gorm.io/gorm"
 	"log"
@@ -12,7 +12,7 @@ import (
 type RoleService struct{}
 
 // Add 添加角色
-func (r *RoleService) Add(request *request.RoleRequest) error {
+func (r *RoleService) Add(request *api.RoleRequest) error {
 	// 校验角色名称是否存在
 	name := request.Name
 	var count int64
@@ -35,7 +35,7 @@ func (r *RoleService) Add(request *request.RoleRequest) error {
 }
 
 // Edit 编辑角色
-func (r *RoleService) Edit(request *request.EditRoleRequest) error {
+func (r *RoleService) Edit(request *api.EditRoleRequest) error {
 	id := request.Id
 	var count int64
 	config.DB.Model(&models.SysRole{}).Where("id = ?", id).Count(&count)
@@ -57,7 +57,7 @@ func (r *RoleService) Edit(request *request.EditRoleRequest) error {
 }
 
 // Page 分页查询角色
-func (r *RoleService) Page(roleRequest *request.PageRoleRequest) (models.PageResult[models.SysRole], error) {
+func (r *RoleService) Page(roleRequest *api.PageRoleRequest) (models.PageResult[models.SysRole], error) {
 	pageNum := roleRequest.PageNum
 	pageSize := roleRequest.PageSize
 

@@ -65,3 +65,27 @@ func (b *BaseController) PageParams(ctx *gin.Context) (*PageRequest, error) {
 	return &pageRequest, nil
 
 }
+
+func (b *BaseController) GetUserId(ctx *gin.Context) string {
+	valueUserId, exists := ctx.Get("userId")
+	if !exists {
+		return ""
+	}
+	return valueUserId.(string)
+}
+
+func (b *BaseController) GetDeptId(ctx *gin.Context) string {
+	valueDeptId, exists := ctx.Get("deptId")
+	if !exists {
+		return ""
+	}
+	return valueDeptId.(string)
+}
+
+func (b *BaseController) GetUserName(ctx *gin.Context) string {
+	valueUserName, exists := ctx.Get("userName")
+	if !exists {
+		return ""
+	}
+	return valueUserName.(string)
+}

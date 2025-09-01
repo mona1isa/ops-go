@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zhany/ops-go/config"
-	"github.com/zhany/ops-go/controllers/system/request"
+	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
 	"golang.org/x/crypto/bcrypt"
@@ -16,7 +16,7 @@ import (
 type UserService struct {
 }
 
-func (u *UserService) UserLogin(request request.LoginRequest) (string, error) {
+func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	// 验证码校验
 	captchaService := CaptchaService{}
 	cap := Captcha{
@@ -56,7 +56,7 @@ func (u *UserService) UserLogin(request request.LoginRequest) (string, error) {
 }
 
 // AddUser 新增用户
-func (u *UserService) AddUser(request request.UserRequest) error {
+func (u *UserService) AddUser(request api.UserRequest) error {
 	password := request.Password
 	hashedPassword, err := u.HashPassword(password)
 	if err != nil {
@@ -83,7 +83,7 @@ func (u *UserService) AddUser(request request.UserRequest) error {
 }
 
 // EditUser 编辑用户
-func (u *UserService) EditUser(request request.EditUserRequest) error {
+func (u *UserService) EditUser(request api.EditUserRequest) error {
 	id := request.Id
 	var count int64
 	user := models.SysUser{}
@@ -111,7 +111,7 @@ func (u *UserService) EditUser(request request.EditUserRequest) error {
 }
 
 // Page 用户列表分页
-func (u *UserService) Page(userRequest *request.PageUserRequest) (models.PageResult[models.SysUser], error) {
+func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[models.SysUser], error) {
 	pageNum := userRequest.PageNum
 	pageSize := userRequest.PageSize
 

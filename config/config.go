@@ -29,8 +29,20 @@ func InitDB() {
 		log.Println("Failed to connect to database, Err:", err)
 	}
 	// 自动执行表迁移操作
-	if err = db.AutoMigrate(&models.SysUser{}, &models.SysLog{}, &models.SysRole{}); err != nil {
-		log.Println("Failed to auto migrate DB, Err:", err)
+	tables := []interface{}{
+		&models.SysUser{},
+		&models.SysLog{},
+		&models.SysRole{},
+		&models.SysUserRole{},
+		&models.SysMenu{},
+		&models.SysRoleMenu{},
+	}
+
+	for _, table := range tables {
+		if err = db.AutoMigrate(table); err != nil {
+			log.Println("Failed to auto migrate table, Err:", err)
+			return
+		}
 	}
 	DB = db
 }

@@ -2,7 +2,7 @@ package system
 
 import (
 	"github.com/zhany/ops-go/config"
-	"github.com/zhany/ops-go/controllers/system/request"
+	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
 	"gorm.io/gorm"
 )
@@ -10,7 +10,7 @@ import (
 type LogService struct {
 }
 
-func (s *LogService) Page(request *request.LogRequest) (models.PageResult[models.SysLog], error) {
+func (s *LogService) Page(request *api.LogRequest) (models.PageResult[models.SysLog], error) {
 	pageNum := request.PageNum
 	pageSize := request.PageSize
 

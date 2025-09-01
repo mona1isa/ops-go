@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/zhany/ops-go/controllers"
-	"github.com/zhany/ops-go/controllers/system/request"
+	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/services/system"
 	"net/http"
 	"time"
@@ -16,7 +16,7 @@ type SysUserController struct {
 
 // LoginHandler 登录
 func (u *SysUserController) LoginHandler(c *gin.Context) {
-	loginRequest := request.LoginRequest{}
+	loginRequest := api.LoginRequest{}
 	err := c.ShouldBindJSON(&loginRequest)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -48,7 +48,7 @@ func (u *SysUserController) LoginHandler(c *gin.Context) {
 
 // AddUserHandler 添加用户
 func (u *SysUserController) AddUserHandler(c *gin.Context) {
-	userRequest := request.UserRequest{}
+	userRequest := api.UserRequest{}
 	if err := c.ShouldBindJSON(&userRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -67,7 +67,7 @@ func (u *SysUserController) AddUserHandler(c *gin.Context) {
 
 // EditUserHandler 编辑用户
 func (s *SysUserController) EditUserHandler(ctx *gin.Context) {
-	userRequest := request.EditUserRequest{}
+	userRequest := api.EditUserRequest{}
 	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
 		s.Failure(ctx, http.StatusBadRequest, err.Error())
 		return
@@ -86,7 +86,7 @@ func (s *SysUserController) EditUserHandler(ctx *gin.Context) {
 }
 
 func (s *SysUserController) Page(c *gin.Context) {
-	userRequest := request.PageUserRequest{}
+	userRequest := api.PageUserRequest{}
 	if err := c.ShouldBindJSON(&userRequest); err != nil {
 		s.Failure(c, http.StatusBadRequest, err)
 		return
