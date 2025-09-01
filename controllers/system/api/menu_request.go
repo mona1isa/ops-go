@@ -3,7 +3,7 @@ package api
 // AddMenuRequest 添加菜单请求参数
 type AddMenuRequest struct {
 	Name      string `json:"name" validate:"required"` // 菜单名称
-	ParentId  int    `json:"parent_id"`                // 父菜单ID
+	ParentId  int    `json:"parentId"`                 // 父菜单ID
 	OrderNum  int    `json:"orderNum"`                 // 排序
 	Path      string `json:"path"`                     // 路由地址
 	Component string `json:"component"`                // 组件路径

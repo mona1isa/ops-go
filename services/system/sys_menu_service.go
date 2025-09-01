@@ -25,7 +25,7 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 	parentId := request.ParentId
 	if parentId != 0 {
 		var count int64
-		config.DB.Model(models.SysMenu{}).Where(NameScope(name)).Count(&count)
+		config.DB.Model(models.SysMenu{}).Where("id=?", parentId).Count(&count)
 		if count == 0 {
 			return errors.New("父菜单不存在")
 		}
@@ -71,6 +71,7 @@ func (*MenuService) List(request *api.MenuListRequest) ([]*api.MenuTree, error) 
 		scopes = append(scopes, StatusScope(status))
 	}
 
+	scopes = append(scopes, DelFlagScope("0"))
 	if len(scopes) > 0 {
 		query = query.Scopes(scopes...)
 	}
@@ -108,26 +109,18 @@ func StatusScope(status string) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
+func DelFlagScope(delFlag string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("del_flag = ?", delFlag)
+	}
+}
+
 // BuildMenuTree 构建菜单树
 func BuildMenuTree(menuList []models.SysMenu, parent int) []*api.MenuTree {
 	var tree []*api.MenuTree
 	for _, menu := range menuList {
 		if menu.ParentId == parent {
-			node := &api.MenuTree{
-				Id:        menu.ID,
-				Name:      menu.Name,
-				ParentId:  menu.ParentId,
-				OrderNum:  menu.OrderNum,
-				Path:      menu.Path,
-				Component: menu.Component,
-				IsFrame:   menu.IsFrame,
-				IsCache:   menu.IsCache,
-				Type:      menu.Type,
-				Visible:   menu.Visible,
-				Status:    menu.Status,
-				Perms:     menu.Perms,
-				Icon:      menu.Icon,
-			}
+			node := ConvertToDto(menu)
 			children := BuildMenuTree(menuList, menu.ID)
 			if len(children) > 0 {
 				node.Children = children
@@ -136,4 +129,23 @@ func BuildMenuTree(menuList []models.SysMenu, parent int) []*api.MenuTree {
 		}
 	}
 	return tree
+}
+
+// ConvertToDto 转换为DTO
+func ConvertToDto(menu models.SysMenu) *api.MenuTree {
+	return &api.MenuTree{
+		Id:        menu.ID,
+		Name:      menu.Name,
+		ParentId:  menu.ParentId,
+		OrderNum:  menu.OrderNum,
+		Path:      menu.Path,
+		Component: menu.Component,
+		IsFrame:   menu.IsFrame,
+		IsCache:   menu.IsCache,
+		Type:      menu.Type,
+		Visible:   menu.Visible,
+		Status:    menu.Status,
+		Perms:     menu.Perms,
+		Icon:      menu.Icon,
+	}
 }
