@@ -116,3 +116,24 @@ func (*SysUserController) Delete(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, result)
 }
+
+// ChangeStatus 修改用户状态
+func (s *SysUserController) ChangeStatus(ctx *gin.Context) {
+	userStatus := api.UserStatusRequest{}
+	if err := ctx.ShouldBindJSON(&userStatus); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	id := userStatus.Id
+	if id == controllers.ADMIN_USER_ID {
+		s.Failure(ctx, http.StatusBadRequest, "不能修改管理员状态")
+		return
+	}
+
+	service := system.UserService{}
+	if err := service.ChangeStatus(userStatus); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
+}

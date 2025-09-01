@@ -138,6 +138,13 @@ func (*UserService) Delete(id string) error {
 	return nil
 }
 
+// ChangeStatus 修改用户状态
+func (*UserService) ChangeStatus(request api.UserStatusRequest) error {
+	id := request.Id
+	config.DB.Model(&models.SysUser{}).Where("id = ?", id).Update("status", request.Status)
+	return nil
+}
+
 // HashPassword 密码加密
 func (*UserService) HashPassword(password string) (string, error) {
 	fromPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

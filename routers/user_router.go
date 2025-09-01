@@ -16,5 +16,6 @@ func (*UserRouter) Setup(r *gin.RouterGroup) {
 		userGroup.POST("/edit", uc.EditUserHandler)
 		userGroup.POST("/page", uc.Page)
 		userGroup.DELETE("/rm/:id", uc.Delete)
+		userGroup.POST("/changeStatus", uc.ChangeStatus)
 	}
 }

@@ -4,10 +4,15 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
 )
 
 type BaseController struct {
 }
+
+const (
+	ADMIN_USER_ID = 1
+)
 
 type PageRequest struct {
 	PageNum  int `json:"pageNum"`
@@ -56,6 +61,7 @@ func (b *BaseController) PageSuccess(ctx *gin.Context, data any, total int64, to
 	})
 }
 
+// PageParams 分页参数
 func (b *BaseController) PageParams(ctx *gin.Context) (*PageRequest, error) {
 	pageRequest := PageRequest{}
 	err := ctx.ShouldBindJSON(&pageRequest)
@@ -66,6 +72,7 @@ func (b *BaseController) PageParams(ctx *gin.Context) (*PageRequest, error) {
 
 }
 
+// GetUserId 获取用户id
 func (b *BaseController) GetUserId(ctx *gin.Context) string {
 	valueUserId, exists := ctx.Get("userId")
 	if !exists {
@@ -74,6 +81,7 @@ func (b *BaseController) GetUserId(ctx *gin.Context) string {
 	return valueUserId.(string)
 }
 
+// GetDeptId 获取部门id
 func (b *BaseController) GetDeptId(ctx *gin.Context) string {
 	valueDeptId, exists := ctx.Get("deptId")
 	if !exists {
@@ -82,10 +90,19 @@ func (b *BaseController) GetDeptId(ctx *gin.Context) string {
 	return valueDeptId.(string)
 }
 
+// GetUserName 获取用户名
 func (b *BaseController) GetUserName(ctx *gin.Context) string {
 	valueUserName, exists := ctx.Get("userName")
 	if !exists {
 		return ""
 	}
 	return valueUserName.(string)
+}
+
+// IsAdminUser 判断是否是管理员
+// true 是管理员 false 不是管理员
+func (b *BaseController) IsAdminUser(ctx *gin.Context) bool {
+	userId := b.GetUserId(ctx)
+	id, _ := strconv.Atoi(userId)
+	return id == ADMIN_USER_ID
 }

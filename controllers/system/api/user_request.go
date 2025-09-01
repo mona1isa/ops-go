@@ -50,3 +50,8 @@ type EditUserRequest struct {
 	LoginIP   string    `json:"loginIp"`
 	LoginDate time.Time `json:"loginDate"`
 }
+
+type UserStatusRequest struct {
+	Id     int    `json:"id" binding:"required"`
+	Status string `json:"status" binding:"required"`
+}
