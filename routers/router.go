@@ -7,9 +7,9 @@ import (
 
 func Init() *gin.Engine {
 	r := gin.Default()
+	r.Use(middleware.Cors())
 	r.Use(middleware.LogMiddleware())
 	r.Use(middleware.AuthMiddleware())
-	r.Use(middleware.Cors())
 
 	api := r.Group("/api")
 	userRouter := &UserRouter{}
