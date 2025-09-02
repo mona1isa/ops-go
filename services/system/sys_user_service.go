@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"strconv"
+	"time"
 )
 
 type UserService struct {
@@ -40,12 +41,27 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 		return "", errors.New("密码错误")
 	}
 
+	// 设置过期时间
+	now := time.Now()
+	exprTime := now.Add(1 * time.Hour)
+	expirationTime := exprTime.Unix()
+	token := captchaService.GetUuid()
 	userId := strconv.Itoa(int(user.ID))
 	deptId := strconv.Itoa(int(user.DeptId))
-	jwt, err := middleware.GenerateJWT(userId, deptId, user.UserName)
+	jwt, err := middleware.GenerateJWT(expirationTime, token, userId, deptId, user.UserName)
 	if err != nil {
 		log.Println("生成Token异常：", err)
 		return "", errors.New("生成Token异常")
+	}
+	// 创建用户Token
+	userToken := models.SysUserToken{
+		UserId:   user.ID,
+		Token:    token,
+		ExpireAt: exprTime,
+	}
+	if err := config.DB.Create(&userToken).Error; err != nil {
+		log.Println("创建用户Token失败：", err)
+		return "", err
 	}
 
 	// 更新用户登录信息
@@ -53,6 +69,13 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	user.LoginDate = request.LoginDate
 	config.DB.Updates(&user)
 	return jwt, nil
+}
+
+func (u *UserService) LogOut(tokenString string) {
+	err := middleware.InvalidateToken(tokenString)
+	if err != nil {
+		return
+	}
 }
 
 // AddUser 新增用户

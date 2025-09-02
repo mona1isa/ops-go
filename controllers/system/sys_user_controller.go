@@ -15,7 +15,7 @@ type SysUserController struct {
 }
 
 // LoginHandler 登录
-func (u *SysUserController) LoginHandler(c *gin.Context) {
+func (s *SysUserController) LoginHandler(c *gin.Context) {
 	loginRequest := api.LoginRequest{}
 	err := c.ShouldBindJSON(&loginRequest)
 	if err != nil {
@@ -44,6 +44,14 @@ func (u *SysUserController) LoginHandler(c *gin.Context) {
 		"token": jwt,
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// LogOutHandler 登出
+func (s *SysUserController) LogOutHandler(ctx *gin.Context) {
+	service := system.UserService{}
+	tokenString := ctx.GetHeader("Authorization")
+	service.LogOut(tokenString)
+	s.JustSuccess(ctx)
 }
 
 // AddUserHandler 添加用户

@@ -22,10 +22,9 @@ type CaptchaService struct {
 }
 
 // GenerateCaptcha 生成验证码
-func (*CaptchaService) GenerateCaptcha() *Captcha {
+func (c *CaptchaService) GenerateCaptcha() *Captcha {
 	// 生成uuid
-	uuidV4 := uuid.New().String()
-	uuidV4 = strings.ReplaceAll(uuidV4, "-", "")
+	uuidV4 := c.GetUuid()
 	// 生成验证码
 	//data, err := captcha.New(150, 50)
 	data, err := captcha.NewMathExpr(150, 50)
@@ -70,4 +69,11 @@ func (*CaptchaService) VerifyCaptcha(instance *Captcha) bool {
 		_ = utils.DelCache(key)
 	}
 	return rs
+}
+
+// GetUuid 生成uuid
+func (*CaptchaService) GetUuid() string {
+	uuidV4 := uuid.New().String()
+	uuidV4 = strings.ReplaceAll(uuidV4, "-", "")
+	return uuidV4
 }

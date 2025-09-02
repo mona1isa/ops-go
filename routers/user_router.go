@@ -12,6 +12,7 @@ func (*UserRouter) Setup(r *gin.RouterGroup) {
 	userGroup := r.Group("/user")
 	{
 		userGroup.POST("/login", uc.LoginHandler)
+		userGroup.GET("/logout", uc.LogOutHandler)
 		userGroup.POST("/add", uc.AddUserHandler)
 		userGroup.POST("/edit", uc.EditUserHandler)
 		userGroup.POST("/page", uc.Page)

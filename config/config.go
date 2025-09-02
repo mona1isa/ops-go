@@ -36,6 +36,7 @@ func InitDB() {
 		&models.SysUserRole{},
 		&models.SysMenu{},
 		&models.SysRoleMenu{},
+		&models.SysUserToken{},
 	}
 
 	for _, table := range tables {

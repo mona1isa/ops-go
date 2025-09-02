@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
+	"github.com/zhany/ops-go/config"
+	"github.com/zhany/ops-go/models"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +16,7 @@ import (
 
 type CustomClaims struct {
 	UserID   string `json:"userId"`
+	Token    string `json:"token"`
 	Username string `json:"username"`
 	DeptId   string `json:"deptId"`
 	Scope    string `json:"scope"`
@@ -63,14 +67,12 @@ func AuthMiddleware() gin.HandlerFunc {
 }
 
 // GenerateJWT 生成JWT
-func GenerateJWT(userId, username, deptId string) (string, error) {
-	// 设置过期时间
-	expirationTime := time.Now().Add(1 * time.Hour).Unix()
-
+func GenerateJWT(expirationTime int64, token, userId, deptId, username string) (string, error) {
 	claims := CustomClaims{
+		Token:    token,
 		UserID:   userId,
-		Username: username,
 		DeptId:   deptId,
+		Username: username,
 		Scope:    "read write",
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime,
@@ -80,8 +82,8 @@ func GenerateJWT(userId, username, deptId string) (string, error) {
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(secret))
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := jwtToken.SignedString([]byte(secret))
 	if err != nil {
 		errInfo := fmt.Sprintf("生成Token失败：%v", err.Error())
 		return "", errors.New(errInfo)
@@ -106,7 +108,51 @@ func ValidateToken(tokenString string) (*CustomClaims, error) {
 		if claims.Issuer != issuer {
 			return nil, errors.New("无效的签发者")
 		}
+		// 校验用户token
+		userToken := claims.Token
+		if !CheckToken(userToken) {
+			return nil, errors.New("token无效或已过期")
+		}
 		return claims, nil
 	}
 	return nil, errors.New("无效的token")
+}
+
+// CheckToken 校验用户token
+func CheckToken(userToken string) bool {
+	sysUserToken := models.SysUserToken{}
+	if err := config.DB.Model(models.SysUserToken{}).Where("token = ?", userToken).First(&sysUserToken).Error; err != nil {
+		log.Println("用户token 不存在", err)
+		return false
+	}
+	if time.Now().After(sysUserToken.ExpireAt) {
+		log.Println("用户token 已过期")
+		return false
+	}
+	return true
+}
+
+// InvalidateToken 使Token失效
+func InvalidateToken(tokenString string) error {
+	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			errInfo := fmt.Sprintf("unexpected signing method: %v", token.Header["alg"])
+			return nil, errors.New(errInfo)
+		}
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return err
+	}
+	if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
+		if claims.Issuer != issuer {
+			return errors.New("无效的签发者")
+		}
+		userToken := models.SysUserToken{
+			Token: claims.Token,
+		}
+		config.DB.Delete(&models.SysUserToken{}, userToken)
+		return nil
+	}
+	return nil
 }
