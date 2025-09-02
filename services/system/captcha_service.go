@@ -27,7 +27,8 @@ func (*CaptchaService) GenerateCaptcha() *Captcha {
 	uuidV4 := uuid.New().String()
 	uuidV4 = strings.ReplaceAll(uuidV4, "-", "")
 	// 生成验证码
-	data, err := captcha.New(280, 150)
+	//data, err := captcha.New(150, 50)
+	data, err := captcha.NewMathExpr(150, 50)
 	if err != nil {
 		log.Println("生成图形验证码失败", err)
 	}
