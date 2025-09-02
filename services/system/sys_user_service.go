@@ -79,6 +79,15 @@ func (u *UserService) AddUser(request api.UserRequest) error {
 		log.Println("添加用户失败：", err)
 		return err
 	}
+	// 保存用户角色
+	userRole := models.SysUserRole{
+		UserId: user.ID,
+		RoleId: request.RoleId,
+	}
+	if err := config.DB.Create(&userRole).Error; err != nil {
+		log.Println("保存用户角色失败：", err)
+		return err
+	}
 	return nil
 }
 

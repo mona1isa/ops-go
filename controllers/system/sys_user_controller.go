@@ -47,22 +47,19 @@ func (u *SysUserController) LoginHandler(c *gin.Context) {
 }
 
 // AddUserHandler 添加用户
-func (u *SysUserController) AddUserHandler(c *gin.Context) {
+func (s *SysUserController) AddUserHandler(ctx *gin.Context) {
 	userRequest := api.UserRequest{}
-	if err := c.ShouldBindJSON(&userRequest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	userService := system.UserService{}
 	if err := userService.AddUser(userRequest); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
 	}
-	result := map[string]any{
-		"code": 200,
-		"msg":  "success",
-	}
-	c.JSON(http.StatusOK, result)
+	s.JustSuccess(ctx)
 }
 
 // EditUserHandler 编辑用户
@@ -104,17 +101,13 @@ func (s *SysUserController) Page(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-func (*SysUserController) Delete(c *gin.Context) {
+func (s *SysUserController) Delete(ctx *gin.Context) {
 	service := system.UserService{}
-	id := c.Param("id")
+	id := ctx.Param("id")
 	if err := service.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
 	}
-	result := map[string]any{
-		"code": 200,
-		"msg":  "success",
-	}
-	c.JSON(http.StatusOK, result)
+	s.JustSuccess(ctx)
 }
 
 // ChangeStatus 修改用户状态

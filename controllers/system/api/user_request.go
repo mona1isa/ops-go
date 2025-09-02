@@ -12,6 +12,7 @@ type UserRequest struct {
 	Nickname  string    `json:"nickName"`
 	Email     string    `json:"email" binding:"email"`
 	Phone     string    `json:"phone" binding:"required"`
+	RoleId    int       `json:"roleId" binding:"required"`
 	Sex       int       `json:"sex"`
 	Avatar    string    `json:"avatar"`
 	Password  string    `json:"password"`
