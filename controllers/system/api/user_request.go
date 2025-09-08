@@ -56,3 +56,17 @@ type UserStatusRequest struct {
 	Id     int    `json:"id" binding:"required"`
 	Status string `json:"status" binding:"required"`
 }
+
+type UserInfo struct {
+	Id       int    `json:"id"`
+	DeptId   int    `json:"deptId"`
+	UserName string `json:"userName"`
+	Nickname string `json:"nickName"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+	Sex      int    `json:"sex"`
+	Avatar   string `json:"avatar"`
+	Status   string `json:"status"`
+	RoleId   int    `json:"roleId"`
+	RoleName string `json:"roleName"`
+}

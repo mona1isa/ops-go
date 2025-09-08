@@ -71,11 +71,46 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	return jwt, nil
 }
 
+// LogOut 退出登录
 func (u *UserService) LogOut(tokenString string) {
 	err := middleware.InvalidateToken(tokenString)
 	if err != nil {
 		return
 	}
+}
+
+// GetUserInfo 获取用户信息
+func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
+	user := models.SysUser{}
+	if err := config.DB.Model(&models.SysUser{}).Where("id = ?", userId).First(&user).Error; err != nil {
+		return nil, errors.New("用户不存在")
+	}
+
+	userRole := models.SysUserRole{}
+	if err := config.DB.Model(&models.SysUserRole{}).Where("user_id = ?", userId).First(&userRole).Error; err != nil {
+		return nil, errors.New("用户角色不存在")
+	}
+
+	role := models.SysRole{}
+	if err := config.DB.Model(&models.SysRole{}).Where("id = ?", userRole.RoleId).First(&role).Error; err != nil {
+		return nil, errors.New("角色不存在")
+	}
+
+	userInfo := &api.UserInfo{
+		Id:       user.ID,
+		DeptId:   user.DeptId,
+		UserName: user.UserName,
+		Nickname: user.NickName,
+		Email:    user.Email,
+		Phone:    user.Phone,
+		Sex:      user.Sex,
+		Avatar:   user.Avatar,
+		Status:   user.Status,
+		RoleId:   userRole.RoleId,
+		RoleName: role.Name,
+	}
+
+	return userInfo, nil
 }
 
 // AddUser 新增用户

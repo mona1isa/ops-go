@@ -70,6 +70,18 @@ func (s *SysUserController) AddUserHandler(ctx *gin.Context) {
 	s.JustSuccess(ctx)
 }
 
+// UserInfoHandler 获取用户信息
+func (s *SysUserController) UserInfoHandler(ctx *gin.Context) {
+	userId := s.GetUserId(ctx)
+	userService := system.UserService{}
+	userInfo, err := userService.GetUserInfo(userId)
+	if err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.Success(ctx, userInfo)
+}
+
 // EditUserHandler 编辑用户
 func (s *SysUserController) EditUserHandler(ctx *gin.Context) {
 	userRequest := api.EditUserRequest{}
