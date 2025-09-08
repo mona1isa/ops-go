@@ -68,5 +68,5 @@ type UserInfo struct {
 	Avatar   string `json:"avatar"`
 	Status   string `json:"status"`
 	RoleId   int    `json:"roleId"`
-	RoleName string `json:"roleName"`
+	Roles    string `json:"roles"`
 }
