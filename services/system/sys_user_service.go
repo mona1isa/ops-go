@@ -107,7 +107,7 @@ func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
 		Avatar:   user.Avatar,
 		Status:   user.Status,
 		RoleId:   userRole.RoleId,
-		Roles:    role.Name,
+		RoleName: role.Name,
 	}
 
 	return userInfo, nil

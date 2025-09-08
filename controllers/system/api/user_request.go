@@ -60,7 +60,7 @@ type UserStatusRequest struct {
 type UserInfo struct {
 	Id       int    `json:"id"`
 	DeptId   int    `json:"deptId"`
-	UserName string `json:"userName"`
+	UserName string `json:"username"`
 	Nickname string `json:"nickName"`
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
@@ -68,5 +68,5 @@ type UserInfo struct {
 	Avatar   string `json:"avatar"`
 	Status   string `json:"status"`
 	RoleId   int    `json:"roleId"`
-	Roles    string `json:"roles"`
+	RoleName string `json:"roleName"`
 }
