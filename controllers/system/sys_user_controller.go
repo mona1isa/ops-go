@@ -113,12 +113,7 @@ func (s *SysUserController) Page(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
-	result := map[string]any{
-		"code": 200,
-		"msg":  "success",
-		"data": all,
-	}
-	c.JSON(http.StatusOK, result)
+	s.Success(c, all)
 }
 
 func (s *SysUserController) Delete(ctx *gin.Context) {
