@@ -12,6 +12,7 @@ func (*MenuRouter) Setup(r *gin.RouterGroup) {
 	mc := system.SysMenuController{}
 	menuGroup := r.Group("/menu")
 	{
+		menuGroup.GET("/getRoutes", mc.RouteHandler)
 		menuGroup.POST("/add", mc.Add)
 		menuGroup.POST("/edit", mc.Edit)
 		menuGroup.POST("/list", mc.List)

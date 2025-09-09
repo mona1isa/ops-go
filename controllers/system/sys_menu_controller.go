@@ -32,6 +32,18 @@ func (s *SysMenuController) Add(ctx *gin.Context) {
 	s.JustSuccess(ctx)
 }
 
+// RouteHandler 前段获取菜单路由
+func (s *SysMenuController) RouteHandler(ctx *gin.Context) {
+	service := system.MenuService{}
+	menus, err := service.RoutesList()
+	if err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	s.Success(ctx, menus)
+}
+
 // List 菜单列表
 func (s *SysMenuController) List(ctx *gin.Context) {
 	menuListRequest := api.MenuListRequest{}

@@ -37,6 +37,7 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 		OrderNum:  request.OrderNum,
 		Path:      request.Path,
 		Component: request.Component,
+		IsAffix:   request.IsAffix,
 		IsFrame:   request.IsFrame,
 		IsCache:   request.IsCache,
 		Type:      request.Type,
@@ -53,6 +54,20 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 	}
 
 	return nil
+}
+
+// RoutesList 前段获取路由信息
+func (*MenuService) RoutesList() ([]*api.MenuTree, error) {
+	menuList := make([]models.SysMenu, 0)
+
+	tx := config.DB.Model(models.SysMenu{}).
+		Where("type <> ? AND status = ? AND del_flag = ?", "F", "1", "0")
+	if err := tx.Find(&menuList).Error; err != nil {
+		log.Println("查询菜单列表失败", err)
+		return nil, errors.New("查询菜单列表失败")
+	}
+	result := BuildMenuTree(menuList, 0)
+	return result, nil
 }
 
 // List 菜单列表
@@ -133,6 +148,21 @@ func BuildMenuTree(menuList []models.SysMenu, parent int) []*api.MenuTree {
 
 // ConvertToDto 转换为DTO
 func ConvertToDto(menu models.SysMenu) *api.MenuTree {
+	meta := api.Meta{
+		Title:    menu.Name,
+		IsLink:   false,
+		IsHide:   false,
+		IsAffix:  false,
+		IsIframe: false,
+		Roles:    []string{"admin"},
+		Icon:     menu.Icon,
+	}
+	if menu.Type == "C" {
+		meta.KeepAlive = true
+	} else {
+		meta.KeepAlive = false
+	}
+
 	return &api.MenuTree{
 		Id:        menu.ID,
 		Name:      menu.Name,
@@ -147,5 +177,6 @@ func ConvertToDto(menu models.SysMenu) *api.MenuTree {
 		Status:    menu.Status,
 		Perms:     menu.Perms,
 		Icon:      menu.Icon,
+		Meta:      meta,
 	}
 }

@@ -6,6 +6,7 @@ type SysMenu struct {
 	OrderNum  int    `gorm:"type:int(4);comment:显示顺序" json:"orderNum"`
 	Path      string `gorm:"type:varchar(200);comment:路由地址" json:"path"`
 	Component string `gorm:"type:varchar(255);comment:组件路径" json:"component"`
+	IsAffix   bool   `gorm:"type:tinyint(1);comment:是否固定（1 是 0 否）" json:"isAffix"`
 	IsFrame   int    `gorm:"type:tinyint(1);comment:是否为外链（1是 0否）" json:"isFrame"`
 	IsCache   int    `gorm:"type:tinyint(1);comment:是否缓存（1缓存 0不缓存）" json:"isCache"`
 	Type      string `gorm:"type:char(1);comment:菜单类型（M目录 C菜单 F按钮）" json:"type"`
