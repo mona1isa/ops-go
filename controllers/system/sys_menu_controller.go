@@ -6,6 +6,7 @@ import (
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/services/system"
 	"net/http"
+	"strconv"
 )
 
 type SysMenuController struct {
@@ -68,5 +69,13 @@ func (s *SysMenuController) Edit(ctx *gin.Context) {
 
 // Remove 删除菜单
 func (s *SysMenuController) Remove(ctx *gin.Context) {
-
+	id := ctx.Param("id")
+	menuId, _ := strconv.Atoi(id)
+	service := system.MenuService{}
+	err := service.Delete(menuId)
+	if err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
 }

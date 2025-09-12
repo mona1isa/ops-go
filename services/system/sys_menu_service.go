@@ -9,7 +9,8 @@ import (
 	"log"
 )
 
-type MenuService struct{}
+type MenuService struct {
+}
 
 // Add 添加菜单
 func (*MenuService) Add(request *api.AddMenuRequest) error {
@@ -38,13 +39,15 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 		Path:      request.Path,
 		Component: request.Component,
 		IsAffix:   request.IsAffix,
-		IsFrame:   request.IsFrame,
-		IsCache:   request.IsCache,
+		IsIframe:  request.IsIframe,
+		IsLink:    request.IsLink,
+		KeepAlive: request.KeepAlive,
 		Type:      request.Type,
-		Visible:   request.Visible,
+		IsHide:    request.IsHide,
 		Status:    request.Status,
 		Perms:     request.Perms,
 		Icon:      request.Icon,
+		Url:       request.Url,
 	}
 	menu.CreateBy = request.CreateBy
 	menu.UpdateBy = request.UpdateBy
@@ -106,7 +109,12 @@ func (*MenuService) Edit() error {
 }
 
 // Delete 删除菜单
-func (*MenuService) Delete() error {
+func (m *MenuService) Delete(id int) error {
+	err := Delete[models.SysMenu](id)
+	if err != nil {
+		log.Println("删除菜单错误：", err)
+		return errors.New("删除菜单错误")
+	}
 	return nil
 }
 
@@ -149,13 +157,14 @@ func BuildMenuTree(menuList []models.SysMenu, parent int) []*api.MenuTree {
 // ConvertToDto 转换为DTO
 func ConvertToDto(menu models.SysMenu) *api.MenuTree {
 	meta := api.Meta{
-		Title:    menu.Name,
-		IsLink:   false,
-		IsHide:   false,
-		IsAffix:  false,
-		IsIframe: false,
-		Roles:    []string{"admin"},
-		Icon:     menu.Icon,
+		KeepAlive: menu.KeepAlive,
+		Title:     menu.Name,
+		IsLink:    menu.IsLink,
+		IsHide:    menu.IsHide,
+		IsAffix:   menu.IsAffix,
+		IsIframe:  menu.IsIframe,
+		Roles:     []string{"admin"},
+		Icon:      menu.Icon,
 	}
 	if menu.Type == "C" {
 		meta.KeepAlive = true
@@ -170,13 +179,11 @@ func ConvertToDto(menu models.SysMenu) *api.MenuTree {
 		OrderNum:  menu.OrderNum,
 		Path:      menu.Path,
 		Component: menu.Component,
-		IsFrame:   menu.IsFrame,
-		IsCache:   menu.IsCache,
 		Type:      menu.Type,
-		Visible:   menu.Visible,
 		Status:    menu.Status,
 		Perms:     menu.Perms,
 		Icon:      menu.Icon,
+		Url:       menu.Url,
 		Meta:      meta,
 	}
 }
