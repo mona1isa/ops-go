@@ -64,7 +64,18 @@ func (s *SysMenuController) List(ctx *gin.Context) {
 
 // Edit 编辑菜单
 func (s *SysMenuController) Edit(ctx *gin.Context) {
+	editMenuRequest := api.EditMenuRequest{}
+	if err := ctx.ShouldBindJSON(&editMenuRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
 
+	service := system.MenuService{}
+	if err := service.Edit(&editMenuRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
 }
 
 // Remove 删除菜单

@@ -5,6 +5,7 @@ import (
 	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services"
 	"gorm.io/gorm"
 	"log"
 )
@@ -17,7 +18,7 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 	name := request.Name
 	if name != "" {
 		var count int64
-		config.DB.Model(models.SysMenu{}).Where(NameScope(name)).Count(&count)
+		config.DB.Model(models.SysMenu{}).Where("name = ?", name).Count(&count)
 		if count > 0 {
 			return errors.New("菜单名称已存在")
 		}
@@ -81,7 +82,7 @@ func (*MenuService) List(request *api.MenuListRequest) ([]*api.MenuTree, error) 
 	var scopes []func(db *gorm.DB) *gorm.DB
 	name := request.Name
 	if name != "" {
-		scopes = append(scopes, NameScope(name))
+		scopes = append(scopes, NameLikeScope(name))
 	}
 
 	status := request.Status
@@ -104,13 +105,43 @@ func (*MenuService) List(request *api.MenuListRequest) ([]*api.MenuTree, error) 
 }
 
 // Edit 编辑菜单
-func (*MenuService) Edit() error {
+func (*MenuService) Edit(request *api.EditMenuRequest) error {
+	id := request.Id
+	_, err := services.FindById[models.SysMenu](id)
+	if err != nil {
+		log.Println("查询菜单失败", err)
+		return errors.New("查询菜单失败")
+	}
+
+	var count int64
+	config.DB.Model(models.SysMenu{}).Where("name = ? and id <> ?", request.Name, id).Count(&count)
+	if count > 0 {
+		return errors.New("菜单名称已存在")
+	}
+
+	updates := map[string]any{
+		"name":       request.Name,
+		"order_num":  request.OrderNum,
+		"path":       request.Path,
+		"component":  request.Component,
+		"is_affix":   request.IsAffix,
+		"is_iframe":  request.IsIframe,
+		"is_link":    request.IsLink,
+		"keep_alive": request.KeepAlive,
+		"type":       request.Type,
+		"is_hide":    request.IsHide,
+		"status":     request.Status,
+		"perms":      request.Perms,
+		"icon":       request.Icon,
+		"url":        request.Url,
+	}
+	err = services.Update[models.SysMenu](id, updates)
 	return nil
 }
 
 // Delete 删除菜单
 func (m *MenuService) Delete(id int) error {
-	err := Delete[models.SysMenu](id)
+	err := services.Delete[models.SysMenu](id)
 	if err != nil {
 		log.Println("删除菜单错误：", err)
 		return errors.New("删除菜单错误")
@@ -118,8 +149,15 @@ func (m *MenuService) Delete(id int) error {
 	return nil
 }
 
-// NameScope 构建名称查询条件
-func NameScope(name string) func(db *gorm.DB) *gorm.DB {
+// NameEqScope 构建名称精确查询条件
+func NameEqScope(name string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("name = ?", name)
+	}
+}
+
+// NameScope 构建名称模糊查询条件
+func NameLikeScope(name string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("name like ?", "%"+name+"%")
 	}
