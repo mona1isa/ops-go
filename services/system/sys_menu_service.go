@@ -85,10 +85,7 @@ func (*MenuService) List(request *api.MenuListRequest) ([]*api.MenuTree, error) 
 		scopes = append(scopes, NameLikeScope(name))
 	}
 
-	status := request.Status
-	if status != "" {
-		scopes = append(scopes, StatusScope(status))
-	}
+	scopes = append(scopes, StatusScope(true))
 
 	scopes = append(scopes, DelFlagScope("0"))
 	if len(scopes) > 0 {
@@ -164,7 +161,7 @@ func NameLikeScope(name string) func(db *gorm.DB) *gorm.DB {
 }
 
 // StatusScope 构建状态查询条件
-func StatusScope(status string) func(db *gorm.DB) *gorm.DB {
+func StatusScope(status bool) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("status = ?", status)
 	}

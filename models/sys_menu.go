@@ -12,7 +12,7 @@ type SysMenu struct {
 	KeepAlive bool   `gorm:"type:tinyint(1);comment:是否缓存（true缓存 false不缓存）" json:"keepAlive"`
 	Type      string `gorm:"type:char(1);comment:菜单类型（M目录 C菜单 F按钮）" json:"type"`
 	IsHide    bool   `gorm:"type:tinyint(1);comment:是否隐藏（1隐藏 0显示）" json:"isHide"`
-	Status    string `gorm:"type:char(1);default:0;comment:菜单状态（1正常 0停用）" json:"status"`
+	Status    bool   `gorm:"type:char(1);default:0;comment:菜单状态（1正常 0停用）" json:"status"`
 	Url       string `gorm:"type:varchar(128);default:null;comment:外链地址" json:"url"`
 	Perms     string `gorm:"type:varchar(100);comment:权限标识" json:"perms"`
 	Icon      string `gorm:"type:varchar(100);comment:菜单图标" json:"icon"`

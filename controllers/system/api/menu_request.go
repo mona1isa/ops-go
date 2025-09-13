@@ -13,7 +13,7 @@ type AddMenuRequest struct {
 	KeepAlive bool   `json:"keepAlive"`                // 是否缓存	(true缓存 false不缓存)
 	Type      string `json:"type"`                     // 菜单类型 	(M目录 C菜单 F按钮)
 	IsHide    bool   `json:"isHide"`                   // 显示状态	(true显示 false隐藏)
-	Status    string `json:"status"`                   // 菜单状态	（true正常 false停用）
+	Status    bool   `json:"status"`                   // 菜单状态	（true正常 false停用）
 	Url       string `json:"url"`                      // 外链地址
 	Perms     string `json:"perms"`                    // 权限标识
 	Icon      string `json:"icon"`                     // 菜单图标
@@ -23,8 +23,7 @@ type AddMenuRequest struct {
 
 // MenuListRequest 菜单列表请求参数
 type MenuListRequest struct {
-	Name   string `json:"name"`   // 菜单名称
-	Status string `json:"status"` // 菜单状态
+	Name string `json:"name"` // 菜单名称
 }
 
 // EditMenuRequest 编辑菜单请求参数
@@ -57,7 +56,7 @@ type MenuVo struct {
 	KeepAlive bool   `json:"keepAlive"` // 是否缓存（true缓存 false不缓存）
 	Type      string `json:"type"`      // 菜单类型： M目录 C菜单 F按钮
 	IsHide    string `json:"isHide"`    // 显示状态（true显示 false隐藏）
-	Status    string `json:"status"`    // 菜单状态（true正常 false停用）
+	Status    bool   `json:"status"`    // 菜单状态（true正常 false停用）
 	Url       string `json:"url"`       // 外链地址
 	Perms     string `json:"perms"`     // 权限标识
 	Icon      string `json:"icon"`      // 菜单图标
@@ -71,7 +70,7 @@ type MenuTree struct {
 	Path      string      `json:"path"`               // 路由地址
 	Component string      `json:"component"`          // 组件路径
 	Type      string      `json:"type"`               // 菜单类型 (M目录 C菜单 F按钮)
-	Status    string      `json:"status"`             // 菜单状态 (true 正常 false 停用)
+	Status    bool        `json:"status"`             // 菜单状态 (true 正常 false 停用)
 	Perms     string      `json:"perms"`              // 权限标识
 	Icon      string      `json:"icon"`               // 菜单图标
 	Url       string      `json:"url"`                // 外链地址
