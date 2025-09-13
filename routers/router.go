@@ -17,11 +17,13 @@ func Init() *gin.Engine {
 	logRouter := LogRouter{}
 	roleRouter := RoleRouter{}
 	menuRouter := MenuRouter{}
+	deptRouter := DeptRouter{}
 
 	userRouter.Setup(api)
 	captchaRouter.Setup(api)
 	logRouter.SetUp(api)
 	roleRouter.Setup(api)
 	menuRouter.Setup(api)
+	deptRouter.Setup(api)
 	return r
 }

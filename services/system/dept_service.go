@@ -9,10 +9,11 @@ import (
 	"log"
 )
 
-type DeptService struct{}
+type DeptService struct {
+}
 
 // Add 新增部门
-func (*DeptService) Add(request *api.AddDeptRequest) error {
+func (d *DeptService) Add(request *api.AddDeptRequest) error {
 	name := request.Name
 	var count int64
 	config.DB.Model(models.SysDept{}).Where("name = ?", name).Count(&count)
@@ -26,6 +27,11 @@ func (*DeptService) Add(request *api.AddDeptRequest) error {
 		OrderNum: request.OrderNum,
 		Status:   request.Status,
 	}
+
+	dept.CreateBy = request.CreateBy
+	dept.UpdateBy = request.UpdateBy
+	dept.Remark = request.Remark
+
 	if err := services.Create[models.SysDept](&dept); err != nil {
 		log.Println("新增部门失败：", err)
 		return errors.New("新增部门失败")
@@ -34,7 +40,7 @@ func (*DeptService) Add(request *api.AddDeptRequest) error {
 }
 
 // Edit 编辑部门
-func (*DeptService) Edit(request *api.EditDeptRequest) error {
+func (d *DeptService) Edit(request *api.EditDeptRequest) error {
 	id := request.Id
 	name := request.Name
 	var count int64
@@ -58,22 +64,23 @@ func (*DeptService) Edit(request *api.EditDeptRequest) error {
 }
 
 // Page 分页查询部门
-func (*DeptService) GetTree() error {
+func (d *DeptService) GetTree() error {
 	return nil
 }
 
 // List 部门列表
-func (*DeptService) List() ([]models.SysDept, error) {
-	all, err := services.FindAll[models.SysDept]()
-	if err != nil {
-		log.Println("查询部门失败", err)
-		return all, errors.New("查询部门失败")
+func (d *DeptService) List(request *api.QueryDeptRequest) ([]models.SysDept, error) {
+	var deptList []models.SysDept
+	tx := config.DB.Where("del_flag = ?", "0")
+	if request.Name != "" {
+		tx = tx.Where("name = ?", request.Name)
 	}
-	return all, nil
+	tx.Find(&deptList)
+	return deptList, nil
 }
 
 // Delete 删除部门
-func (*DeptService) Delete(id int) error {
+func (d *DeptService) Delete(id int) error {
 	if err := services.Delete[models.SysDept](id); err != nil {
 		log.Println("删除部门失败：", err)
 		return errors.New("删除部门失败")

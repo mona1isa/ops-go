@@ -55,8 +55,14 @@ func (s *SysDeptController) GetTreeHandler(ctx *gin.Context) {}
 
 // ListHandler 列表查询
 func (s *SysDeptController) ListHandler(ctx *gin.Context) {
+	request := api.QueryDeptRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	service := system.DeptService{}
-	all, err := service.List()
+	all, err := service.List(&request)
 	if err != nil {
 		s.Failure(ctx, http.StatusInternalServerError, err.Error())
 		return
