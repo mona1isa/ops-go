@@ -10,3 +10,9 @@ const TableSysUserRole = "sys_user_role"
 func (SysUserRole) TableName() string {
 	return TableSysUserRole
 }
+
+// SysUserRoleResult 用户角色查询结果集
+type SysUserRoleResult struct {
+	UserID   int    `gorm:"column:userId" json:"userId"`
+	RoleName string `gorm:"column:roleName" json:"roleName"`
+}

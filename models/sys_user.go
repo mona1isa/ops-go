@@ -14,6 +14,7 @@ type SysUser struct {
 	Status    string     `gorm:"type:varchar(1);default:0;comment:帐号状态（1正常 0停用）" json:"status"`
 	LoginIP   string     `gorm:"type:varchar(128);comment:登录IP" json:"loginIP"`
 	LoginDate *time.Time `gorm:"comment:登录时间" json:"loginDate"`
+	RoleName  string     `gorm:"-" json:"roleName"`
 	Base
 }
 

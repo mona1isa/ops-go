@@ -190,9 +190,34 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 
 	pageResult, err := models.Paginate[models.SysUser](config.DB, pageNum, pageSize, scopes...)
 	if err != nil {
+		log.Println("查询用户列表异常：", err)
 		panic(err)
 	}
+
+	// 查询用户角色
+	userRole, err := GetUserRole()
+	if err != nil {
+		log.Println("查询用户角色异常：", err)
+	}
+	for idx, user := range pageResult.Data {
+		for _, role := range userRole {
+			if user.ID == role.UserID {
+				pageResult.Data[idx].RoleName = role.RoleName
+			}
+		}
+	}
+
 	return pageResult, nil
+}
+
+func GetUserRole() ([]models.SysUserRoleResult, error) {
+	var result []models.SysUserRoleResult
+	err := config.DB.Model(&models.SysUser{}).Joins("JOIN sys_user_role ON sys_user_role.user_id = sys_user.id").
+		Joins("JOIN sys_role ON sys_role.id = sys_user_role.role_id").Select("sys_user.id AS userId, sys_role.name AS roleName").Scan(&result).Error
+	if err != nil {
+		return result, err
+	}
+	return result, nil
 }
 
 // Delete 删除用户
