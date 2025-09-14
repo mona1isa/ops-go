@@ -20,11 +20,11 @@ type UserService struct {
 func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	// 验证码校验
 	captchaService := CaptchaService{}
-	cap := Captcha{
+	capVal := Captcha{
 		Uuid: request.Uuid,
 		Text: request.Code,
 	}
-	rs := captchaService.VerifyCaptcha(&cap)
+	rs := captchaService.VerifyCaptcha(&capVal)
 	if !rs {
 		return "", errors.New("验证码错误")
 	}
