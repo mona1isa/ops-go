@@ -15,16 +15,16 @@ type SysUserController struct {
 }
 
 // LoginHandler 登录
-func (s *SysUserController) LoginHandler(c *gin.Context) {
+func (s *SysUserController) LoginHandler(ctx *gin.Context) {
 	loginRequest := api.LoginRequest{}
-	err := c.ShouldBindJSON(&loginRequest)
+	err := ctx.ShouldBindJSON(&loginRequest)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// 设置登录IP和时间
-	loginRequest.LoginIP = c.ClientIP()
+	loginRequest.LoginIP = ctx.ClientIP()
 	now := time.Now()
 	loginRequest.LoginDate = &now
 
@@ -35,7 +35,7 @@ func (s *SysUserController) LoginHandler(c *gin.Context) {
 			"code": http.StatusBadRequest,
 			"msg":  err.Error(),
 		}
-		c.JSON(http.StatusBadRequest, msg)
+		ctx.JSON(http.StatusBadRequest, msg)
 		return
 	}
 	result := map[string]any{
@@ -43,7 +43,7 @@ func (s *SysUserController) LoginHandler(c *gin.Context) {
 		"msg":   "success",
 		"token": jwt,
 	}
-	c.JSON(http.StatusOK, result)
+	ctx.JSON(http.StatusOK, result)
 }
 
 // LogOutHandler 登出

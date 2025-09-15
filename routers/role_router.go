@@ -13,6 +13,7 @@ func (*RoleRouter) Setup(r *gin.RouterGroup) {
 	{
 		roleGroup.POST("/add", sr.Add)
 		roleGroup.POST("/edit", sr.Edit)
+		roleGroup.POST("/list", sr.List)
 		roleGroup.POST("/page", sr.Page)
 		roleGroup.DELETE("/:id", sr.Remove)
 	}

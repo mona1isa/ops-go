@@ -5,6 +5,7 @@ import (
 	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services"
 	"gorm.io/gorm"
 	"log"
 )
@@ -56,6 +57,16 @@ func (r *RoleService) Edit(request *api.EditRoleRequest) error {
 	return nil
 }
 
+// List 角色列表
+func (r *RoleService) List() ([]models.SysRole, error) {
+	all, err := services.FindAll[models.SysRole]()
+	if err != nil {
+		log.Println("查询角色异常：", err)
+		return nil, err
+	}
+	return all, nil
+}
+
 // Page 分页查询角色
 func (r *RoleService) Page(roleRequest *api.PageRoleRequest) (models.PageResult[models.SysRole], error) {
 	pageNum := roleRequest.PageNum
@@ -72,6 +83,9 @@ func (r *RoleService) Page(roleRequest *api.PageRoleRequest) (models.PageResult[
 			return db.Where("status = ?", roleRequest.Status)
 		})
 	}
+
+	// 根据 orderNum 排序
+	scopes = append(scopes, func(db *gorm.DB) *gorm.DB { return db.Order("order_num asc") })
 
 	pageResult, err := models.Paginate[models.SysRole](config.DB, pageNum, pageSize, scopes...)
 	if err != nil {

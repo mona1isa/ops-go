@@ -22,7 +22,7 @@ func (s *SysRoleController) Add(ctx *gin.Context) {
 	}
 	service := system.RoleService{}
 	if err := service.Add(&roleRequest); err != nil {
-		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
 	s.JustSuccess(ctx)
@@ -41,6 +41,17 @@ func (s *SysRoleController) Edit(ctx *gin.Context) {
 		return
 	}
 	s.JustSuccess(ctx)
+}
+
+// List 角色列表
+func (s *SysRoleController) List(ctx *gin.Context) {
+	service := system.RoleService{}
+	roles, err := service.List()
+	if err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.Success(ctx, roles)
 }
 
 // Page 分页查询角色
