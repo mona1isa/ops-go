@@ -268,6 +268,6 @@ func (*UserService) CheckHashPassword(password string, hashedPassword string) er
 
 func UserNameScope(userName string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("user_name = ?", userName)
+		return db.Where("user_name like ?", "%"+userName+"%")
 	}
 }
