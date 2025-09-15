@@ -46,8 +46,8 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	exprTime := now.Add(1 * time.Hour)
 	expirationTime := exprTime.Unix()
 	token := captchaService.GetUuid()
-	userId := strconv.Itoa(int(user.ID))
-	deptId := strconv.Itoa(int(user.DeptId))
+	userId := strconv.Itoa(user.ID)
+	deptId := strconv.Itoa(user.DeptId)
 	jwt, err := middleware.GenerateJWT(expirationTime, token, userId, deptId, user.UserName)
 	if err != nil {
 		log.Println("生成Token异常：", err)
@@ -59,9 +59,19 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 		Token:    token,
 		ExpireAt: exprTime,
 	}
-	if err := config.DB.Create(&userToken).Error; err != nil {
-		log.Println("创建用户Token失败：", err)
-		return "", err
+	// 先查询是否存在记录，存在则更新，不存在则创建记录
+	var tokenCount int64
+	config.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Count(&tokenCount)
+	if tokenCount > 0 {
+		if err := config.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Updates(&userToken).Error; err != nil {
+			log.Println("更新用户Token失败：", err)
+			return "", err
+		}
+	} else {
+		if err := config.DB.Create(&userToken).Error; err != nil {
+			log.Println("创建用户Token失败：", err)
+			return "", err
+		}
 	}
 
 	// 更新用户登录信息
