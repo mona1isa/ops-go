@@ -18,3 +18,11 @@ type EditDeptRequest struct {
 type QueryDeptRequest struct {
 	Name string `json:"name"`
 }
+
+type DeptTree struct {
+	Id       int         `json:"id"`
+	Name     string      `json:"name"`
+	Status   bool        `json:"status"`
+	ParentId int         `json:"parentId"`
+	Children []*DeptTree `json:"children,omitempty"`
+}

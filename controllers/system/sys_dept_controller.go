@@ -51,7 +51,16 @@ func (s *SysDeptController) EditHandler(ctx *gin.Context) {
 }
 
 // GetTreeHandler 树形结构查询
-func (s *SysDeptController) GetTreeHandler(ctx *gin.Context) {}
+func (s *SysDeptController) GetTreeHandler(ctx *gin.Context) {
+	service := system.DeptService{}
+	all, err := service.GetTree()
+	if err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	s.Success(ctx, all)
+}
 
 // ListHandler 列表查询
 func (s *SysDeptController) ListHandler(ctx *gin.Context) {

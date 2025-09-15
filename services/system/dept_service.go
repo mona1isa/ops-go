@@ -64,8 +64,43 @@ func (d *DeptService) Edit(request *api.EditDeptRequest) error {
 }
 
 // Page 分页查询部门
-func (d *DeptService) GetTree() error {
-	return nil
+func (d *DeptService) GetTree() ([]*api.DeptTree, error) {
+	deptList := make([]models.SysDept, 0)
+
+	tx := config.DB.Model(models.SysDept{}).Where("status = ? and del_flag = ?", "1", "0")
+	if tx.Find(&deptList); tx.Error != nil {
+		log.Println("查询部门失败：", tx.Error)
+		return nil, errors.New("查询部门失败")
+	}
+
+	result := BuildDeptTree(deptList, 0)
+
+	return result, nil
+}
+
+func BuildDeptTree(deptList []models.SysDept, parentId int) []*api.DeptTree {
+	var tree []*api.DeptTree
+	for _, dept := range deptList {
+		if dept.ParentId == parentId {
+			node := convertToTree(dept)
+			children := BuildDeptTree(deptList, dept.ID)
+			if len(children) > 0 {
+				node.Children = children
+			}
+			tree = append(tree, node)
+		}
+	}
+	return tree
+}
+
+func convertToTree(dept models.SysDept) *api.DeptTree {
+	tree := api.DeptTree{
+		Name:     dept.Name,
+		ParentId: dept.ParentId,
+		Status:   dept.Status,
+	}
+	tree.Id = dept.ID
+	return &tree
 }
 
 // List 部门列表

@@ -13,7 +13,7 @@ func (*DeptRouter) Setup(r *gin.RouterGroup) {
 	{
 		deptGroup.POST("/add", dc.AddHandler)
 		deptGroup.POST("/edit", dc.EditHandler)
-		deptGroup.GET("/getTree", dc.GetTreeHandler)
+		deptGroup.GET("/tree", dc.GetTreeHandler)
 		deptGroup.POST("/list", dc.ListHandler)
 		deptGroup.DELETE("/:id", dc.RemoveHandler)
 	}
