@@ -98,6 +98,7 @@ func convertToTree(dept models.SysDept) *api.DeptTree {
 		Name:     dept.Name,
 		ParentId: dept.ParentId,
 		Status:   dept.Status,
+		Remark:   dept.Remark,
 	}
 	tree.Id = dept.ID
 	return &tree

@@ -24,5 +24,6 @@ type DeptTree struct {
 	Name     string      `json:"name"`
 	Status   bool        `json:"status"`
 	ParentId int         `json:"parentId"`
+	Remark   string      `json:"remark"`
 	Children []*DeptTree `json:"children,omitempty"`
 }
