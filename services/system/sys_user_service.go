@@ -7,10 +7,12 @@ import (
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,6 +36,11 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	config.DB.First(&user, "user_name=?", username)
 	if user.UserName == "" && user.UserName == username {
 		return "", errors.New("用户不存在")
+	}
+
+	// 用户被禁用后不准登录
+	if strings.EqualFold(user.Status, "0") {
+		return "", errors.New("用户被禁用，请联系管理员")
 	}
 
 	if err := u.CheckHashPassword(request.Password, user.Password); err != nil {
@@ -184,6 +191,13 @@ func (u *UserService) EditUser(request api.EditUserRequest) error {
 		errInfo := fmt.Sprintf("更新用户失败：%s", result.Error)
 		return errors.New(errInfo)
 	}
+	// 修改角色
+	if request.RoleId != 0 {
+		if err := config.DB.Model(&models.SysUserRole{}).Where("user_id = ?", id).Updates(models.SysUserRole{RoleId: request.RoleId}).Error; err != nil {
+			log.Println("更新用户角色失败：", err)
+			return errors.New("更新用户角色失败" + err.Error())
+		}
+	}
 	return nil
 }
 
@@ -204,15 +218,26 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 		panic(err)
 	}
 
+	// 查询部门信息
+	sysDepts, err := services.FindAll[models.SysDept]()
+
 	// 查询用户角色
 	userRole, err := GetUserRole()
 	if err != nil {
 		log.Println("查询用户角色异常：", err)
 	}
 	for idx, user := range pageResult.Data {
+		// 赋值部门信息
+		for _, dept := range sysDepts {
+			if user.DeptId == dept.ID {
+				pageResult.Data[idx].DeptName = dept.Name
+			}
+		}
+		// 赋值角色信息
 		for _, role := range userRole {
 			if user.ID == role.UserID {
 				pageResult.Data[idx].RoleName = role.RoleName
+				pageResult.Data[idx].RoleId = role.RoleID
 			}
 		}
 	}
@@ -223,7 +248,7 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 func GetUserRole() ([]models.SysUserRoleResult, error) {
 	var result []models.SysUserRoleResult
 	err := config.DB.Model(&models.SysUser{}).Joins("JOIN sys_user_role ON sys_user_role.user_id = sys_user.id").
-		Joins("JOIN sys_role ON sys_role.id = sys_user_role.role_id").Select("sys_user.id AS userId, sys_role.name AS roleName").Scan(&result).Error
+		Joins("JOIN sys_role ON sys_role.id = sys_user_role.role_id").Select("sys_user.id AS userId, sys_role.name AS roleName, sys_role.id AS roleId").Scan(&result).Error
 	if err != nil {
 		return result, err
 	}
@@ -237,6 +262,8 @@ func (*UserService) Delete(id string) error {
 		log.Println("删除用户失败：", tx.Error)
 		return errors.New("删除用户失败")
 	}
+	// 删除用户关联角色信息
+	config.DB.Model(&models.SysUserRole{}).Where("user_id = ?", id).Delete(&models.SysUserRole{})
 	return nil
 }
 

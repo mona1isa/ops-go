@@ -15,4 +15,5 @@ func (SysUserRole) TableName() string {
 type SysUserRoleResult struct {
 	UserID   int    `gorm:"column:userId" json:"userId"`
 	RoleName string `gorm:"column:roleName" json:"roleName"`
+	RoleID   int    `gorm:"column:roleId" json:"roleId"`
 }
