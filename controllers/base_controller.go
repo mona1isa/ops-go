@@ -11,7 +11,7 @@ type BaseController struct {
 }
 
 const (
-	ADMIN_USER_ID = 1
+	AdminUserId = 1
 )
 
 type PageRequest struct {
@@ -104,5 +104,5 @@ func (b *BaseController) GetUserName(ctx *gin.Context) string {
 func (b *BaseController) IsAdminUser(ctx *gin.Context) bool {
 	userId := b.GetUserId(ctx)
 	id, _ := strconv.Atoi(userId)
-	return id == ADMIN_USER_ID
+	return id == AdminUserId
 }

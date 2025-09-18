@@ -61,15 +61,42 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 }
 
 // RoutesList 前段获取路由信息
-func (*MenuService) RoutesList() ([]*api.MenuTree, error) {
+func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, error) {
 	menuList := make([]models.SysMenu, 0)
 
-	tx := config.DB.Model(models.SysMenu{}).
-		Where("type <> ? AND status = ? AND del_flag = ?", "F", "1", "0")
-	if err := tx.Find(&menuList).Error; err != nil {
-		log.Println("查询菜单列表失败", err)
-		return nil, errors.New("查询菜单列表失败")
+	if isAdmin {
+		tx := config.DB.Model(models.SysMenu{}).
+			Where("type <> ? AND status = ? AND del_flag = ?", "F", "1", "0")
+		if err := tx.Find(&menuList).Error; err != nil {
+			log.Println("查询菜单列表失败", err)
+			return nil, errors.New("查询菜单列表失败")
+		}
+	} else {
+		var userRole models.SysUserRole
+		if err := config.DB.Model(models.SysUserRole{}).Where("user_id = ?", userId).Find(&userRole).Error; err != nil {
+			log.Println("查询用户角色失败", err)
+			return nil, errors.New("查询用户角色失败")
+		}
+		// 查询角色关联的菜单
+		var roleMenu []models.SysRoleMenu
+		if err := config.DB.Model(models.SysRoleMenu{}).Where("role_id = ?", userRole.RoleId).Find(&roleMenu).Error; err != nil {
+			log.Println("查询角色关联的菜单失败", err)
+			return nil, errors.New("查询角色关联的菜单失败")
+		}
+		var menuIds []int
+		for _, v := range roleMenu {
+			menuIds = append(menuIds, v.MenuId)
+		}
+
+		// 查询菜单
+		tx := config.DB.Model(models.SysMenu{}).
+			Where("type <> ? AND status = ? AND del_flag = ? AND id IN ?", "F", "1", "0", menuIds)
+		if err := tx.Find(&menuList).Error; err != nil {
+			log.Println("查询菜单列表失败", err)
+			return nil, errors.New("查询菜单列表失败")
+		}
 	}
+
 	result := BuildMenuTree(menuList, 0)
 	return result, nil
 }

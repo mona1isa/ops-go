@@ -36,7 +36,10 @@ func (s *SysMenuController) Add(ctx *gin.Context) {
 // RouteHandler 前段获取菜单路由
 func (s *SysMenuController) RouteHandler(ctx *gin.Context) {
 	service := system.MenuService{}
-	menus, err := service.RoutesList()
+
+	userId := s.GetUserId(ctx)
+	isAdmin := s.IsAdminUser(ctx)
+	menus, err := service.RoutesList(userId, isAdmin)
 	if err != nil {
 		s.Failure(ctx, http.StatusBadRequest, err.Error())
 		return

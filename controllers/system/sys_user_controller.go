@@ -133,7 +133,7 @@ func (s *SysUserController) ChangeStatus(ctx *gin.Context) {
 		return
 	}
 	id := userStatus.Id
-	if id == controllers.ADMIN_USER_ID {
+	if id == controllers.AdminUserId {
 		s.Failure(ctx, http.StatusBadRequest, "不能修改管理员状态")
 		return
 	}
