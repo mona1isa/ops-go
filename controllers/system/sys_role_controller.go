@@ -2,8 +2,10 @@ package system
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers"
 	"github.com/zhany/ops-go/controllers/system/api"
+	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services/system"
 	"net/http"
 	"strconv"
@@ -75,6 +77,18 @@ func (s *SysRoleController) Page(ctx *gin.Context) {
 func (s *SysRoleController) Remove(ctx *gin.Context) {
 	roleId := ctx.Param("id")
 	id, _ := strconv.Atoi(roleId)
+
+	var count int64
+	if err := config.DB.Model(models.SysUserRole{}).Where("role_id = ?", id).Count(&count).Error; err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if count > 0 {
+		s.Failure(ctx, http.StatusBadRequest, "该角色下有用户，无法删除")
+		return
+	}
+
 	service := system.RoleService{}
 	if err := service.Remove(id); err != nil {
 		s.Failure(ctx, http.StatusInternalServerError, err.Error())

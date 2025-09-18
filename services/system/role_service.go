@@ -28,9 +28,19 @@ func (r *RoleService) Add(request *api.RoleRequest) error {
 		Status:   request.Status,
 	}
 	role.Remark = request.Remark
-	if err := config.DB.Create(role).Error; err != nil {
+	tx := config.DB.Model(&models.SysRole{}).Create(&role)
+	if err := tx.Error; err != nil {
 		log.Println("添加角色失败：", err.Error())
 		return errors.New("添加角色失败：" + err.Error())
+	}
+	roleId := role.ID
+	// 添加角色权限
+	for _, menuId := range request.MenuIds {
+		if err := config.DB.Model(&models.SysRoleMenu{}).Create(&models.SysRoleMenu{RoleId: roleId, MenuId: menuId}).Error; err != nil {
+			log.Println("添加角色权限失败：", err.Error())
+			tx.Rollback()
+			return errors.New("添加角色权限失败：" + err.Error())
+		}
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ type RoleRequest struct {
 	OrderNum int    `json:"orderNum"`
 	Status   string `json:"status"`
 	Remark   string `json:"remark"`
+	MenuIds  []int  `json:"menuIds" binding:"required"` // 菜单ID
 }
 
 type EditRoleRequest struct {
