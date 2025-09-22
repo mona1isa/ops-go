@@ -16,6 +16,7 @@ type EditRoleRequest struct {
 	OrderNum int    `json:"orderNum"`
 	Status   string `json:"status"`
 	Remark   string `json:"remark"`
+	MenuIds  []int  `json:"menuIds"` // 菜单ID
 }
 
 type PageRoleRequest struct {
@@ -24,4 +25,9 @@ type PageRoleRequest struct {
 	OrderNum int    `json:"orderNum"`
 	Status   string `json:"status"`
 	Remark   string `json:"remark"`
+}
+
+type RoleAsignRequest struct {
+	UserIds []int `json:"userIds" binding:"required"`
+	RoleId  int   `json:"roleId" binding:"required"`
 }

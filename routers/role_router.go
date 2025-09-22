@@ -16,5 +16,8 @@ func (*RoleRouter) Setup(r *gin.RouterGroup) {
 		roleGroup.POST("/list", sr.List)
 		roleGroup.POST("/page", sr.Page)
 		roleGroup.DELETE("/:id", sr.Remove)
+		roleGroup.GET("/menu/:roleId", sr.GetMenuIds)
+		roleGroup.GET("/user/:roleId", sr.GetUserIds)
+		roleGroup.POST("/assignUsers", sr.RoleAsignUsers)
 	}
 }

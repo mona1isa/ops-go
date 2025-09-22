@@ -117,6 +117,18 @@ func (d *DeptService) List(request *api.QueryDeptRequest) ([]models.SysDept, err
 
 // Delete 删除部门
 func (d *DeptService) Delete(id int) error {
+	var count int64
+	config.DB.Model(models.SysDept{}).Where("parent_id = ?", id).Count(&count)
+	if count > 0 {
+		return errors.New("该部门下有子部门，无法删除")
+	}
+
+	var deptUserCount int64
+	config.DB.Model(models.SysUser{}).Where("dept_id = ?", id).Count(&deptUserCount)
+	if deptUserCount > 0 {
+		return errors.New("该部门下有用户，无法删除")
+	}
+
 	if err := services.Delete[models.SysDept](id); err != nil {
 		log.Println("删除部门失败：", err)
 		return errors.New("删除部门失败")

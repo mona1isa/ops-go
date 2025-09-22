@@ -96,3 +96,37 @@ func (s *SysRoleController) Remove(ctx *gin.Context) {
 	}
 	s.JustSuccess(ctx)
 }
+
+// GetMenuIds 获取角色菜单id
+func (s *SysRoleController) GetMenuIds(ctx *gin.Context) {
+	roleId := ctx.Param("roleId")
+	id, _ := strconv.Atoi(roleId)
+
+	service := system.RoleService{}
+	menuIds := service.GetMenuIds(id)
+	s.Success(ctx, menuIds)
+}
+
+// GetUserIds 获取角色用户id
+func (s *SysRoleController) GetUserIds(ctx *gin.Context) {
+	roleId := ctx.Param("roleId")
+	id, _ := strconv.Atoi(roleId)
+
+	service := system.RoleService{}
+	userIds := service.GetUserIds(id)
+	s.Success(ctx, userIds)
+}
+
+// RoleAsignUsers 角色分配用户
+func (s *SysRoleController) RoleAsignUsers(ctx *gin.Context) {
+	roleAsignRequest := api.RoleAsignRequest{}
+	if err := ctx.ShouldBindJSON(&roleAsignRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := system.RoleService{}
+	if err := service.RoleAsignUsers(roleAsignRequest); err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+	}
+	s.JustSuccess(ctx)
+}

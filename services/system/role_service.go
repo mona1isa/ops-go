@@ -12,6 +12,8 @@ import (
 
 type RoleService struct{}
 
+const DISABLED = "0"
+
 // Add 添加角色
 func (r *RoleService) Add(request *api.RoleRequest) error {
 	// 校验角色名称是否存在
@@ -64,6 +66,8 @@ func (r *RoleService) Edit(request *api.EditRoleRequest) error {
 		log.Println("编辑角色失败：", err.Error())
 		return errors.New("编辑角色失败：" + err.Error())
 	}
+	// 保存角色菜单
+	_ = saveRoleMenu(request.MenuIds, id)
 	return nil
 }
 
@@ -108,6 +112,66 @@ func (r *RoleService) Page(roleRequest *api.PageRoleRequest) (models.PageResult[
 func (r *RoleService) Remove(id int) error {
 	if err := config.DB.Delete(&models.SysRole{}, id).Error; err != nil {
 		return errors.New("角色删除失败: " + err.Error())
+	}
+	return nil
+}
+
+// GetMenuIds 获取角色菜单
+func (r *RoleService) GetMenuIds(roleId int) []int {
+	var menuIds []int
+	config.DB.Model(models.SysRoleMenu{}).Select("menu_id").Where("role_id = ?", roleId).Find(&menuIds)
+	return menuIds
+}
+
+// GetUserIds 获取角色用户
+func (r *RoleService) GetUserIds(roleId int) []int {
+	var userIds []int
+	config.DB.Model(models.SysUserRole{}).Select("user_id").Where("role_id = ?", roleId).Find(&userIds)
+	return userIds
+}
+
+// RoleAsignUsers 角色授权
+func (r *RoleService) RoleAsignUsers(request api.RoleAsignRequest) error {
+	roleId := request.RoleId
+	var role models.SysRole
+	if err := config.DB.Model(models.SysRole{}).Where("id = ?", roleId).Find(&role).Error; err != nil {
+		return errors.New("角色不存在")
+	}
+
+	if role.Status == DISABLED {
+		return errors.New("角色已禁用，无法授权")
+	}
+
+	_ = saveUserRole(request.UserIds, roleId)
+	return nil
+}
+
+// saveRoleMenu 保存角色菜单
+func saveRoleMenu(menuIds []int, roleId int) error {
+	if len(menuIds) == 0 {
+		return nil
+	}
+	config.DB.Model(&models.SysRoleMenu{}).Where("role_id = ?", roleId).Delete(&models.SysRoleMenu{})
+	for _, menuId := range menuIds {
+		if err := config.DB.Model(&models.SysRoleMenu{}).Create(&models.SysRoleMenu{RoleId: roleId, MenuId: menuId}).Error; err != nil {
+			return errors.New("保存角色菜单失败: " + err.Error())
+		}
+	}
+	return nil
+}
+
+// saveUserRole 保存用户角色
+func saveUserRole(userIds []int, roleId int) error {
+	if len(userIds) == 0 {
+		return nil
+	}
+
+	// 删除旧的角色用户
+	config.DB.Model(&models.SysUserRole{}).Where("role_id = ?", roleId).Delete(&models.SysUserRole{})
+
+	// 添加新的角色用户
+	for _, userId := range userIds {
+		config.DB.Create(&models.SysUserRole{RoleId: roleId, UserId: userId})
 	}
 	return nil
 }
