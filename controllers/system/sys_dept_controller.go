@@ -91,3 +91,18 @@ func (s *SysDeptController) RemoveHandler(ctx *gin.Context) {
 	}
 	s.JustSuccess(ctx)
 }
+
+func (s *SysDeptController) UpdateStatusHandler(ctx *gin.Context) {
+	request := api.DeptStatusRequest{}
+	err := ctx.ShouldBindJSON(&request)
+	if err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := system.DeptService{}
+	if err := service.UpdateStatus(&request); err != nil {
+		s.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
+}

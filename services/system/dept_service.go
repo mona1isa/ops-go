@@ -67,7 +67,7 @@ func (d *DeptService) Edit(request *api.EditDeptRequest) error {
 func (d *DeptService) GetTree() ([]*api.DeptTree, error) {
 	deptList := make([]models.SysDept, 0)
 
-	tx := config.DB.Model(models.SysDept{}).Where("status = ? and del_flag = ?", "1", "0")
+	tx := config.DB.Model(models.SysDept{}).Where(" del_flag = ?", "0")
 	if tx.Find(&deptList); tx.Error != nil {
 		log.Println("查询部门失败：", tx.Error)
 		return nil, errors.New("查询部门失败")
@@ -132,6 +132,15 @@ func (d *DeptService) Delete(id int) error {
 	if err := services.Delete[models.SysDept](id); err != nil {
 		log.Println("删除部门失败：", err)
 		return errors.New("删除部门失败")
+	}
+	return nil
+}
+
+func (d *DeptService) UpdateStatus(request *api.DeptStatusRequest) error {
+	id := request.Id
+	if err := config.DB.Model(models.SysDept{}).Where("id = ?", id).Update("status", request.Status).Error; err != nil {
+		log.Println("更新部门状态失败：", err)
+		return errors.New("更新部门状态失败")
 	}
 	return nil
 }

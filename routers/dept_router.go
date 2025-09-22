@@ -16,5 +16,6 @@ func (*DeptRouter) Setup(r *gin.RouterGroup) {
 		deptGroup.GET("/tree", dc.GetTreeHandler)
 		deptGroup.POST("/list", dc.ListHandler)
 		deptGroup.DELETE("/:id", dc.RemoveHandler)
+		deptGroup.POST("/updateStatus", dc.UpdateStatusHandler)
 	}
 }
