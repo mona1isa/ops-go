@@ -72,14 +72,19 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 			return nil, errors.New("查询菜单列表失败")
 		}
 	} else {
-		var userRole models.SysUserRole
-		if err := config.DB.Model(models.SysUserRole{}).Where("user_id = ?", userId).Find(&userRole).Error; err != nil {
+		var userRoles []models.SysUserRole
+		if err := config.DB.Model(models.SysUserRole{}).Where("user_id = ?", userId).Find(&userRoles).Error; err != nil {
 			log.Println("查询用户角色失败", err)
 			return nil, errors.New("查询用户角色失败")
 		}
+
+		var roleIds []int
+		for _, roleId := range userRoles {
+			roleIds = append(roleIds, roleId.RoleId)
+		}
 		// 查询角色关联的菜单
 		var roleMenu []models.SysRoleMenu
-		if err := config.DB.Model(models.SysRoleMenu{}).Where("role_id = ?", userRole.RoleId).Find(&roleMenu).Error; err != nil {
+		if err := config.DB.Model(models.SysRoleMenu{}).Where("role_id in ?", roleIds).Find(&roleMenu).Error; err != nil {
 			log.Println("查询角色关联的菜单失败", err)
 			return nil, errors.New("查询角色关联的菜单失败")
 		}

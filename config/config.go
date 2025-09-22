@@ -12,9 +12,11 @@ import (
 	"strconv"
 )
 
-var DB *gorm.DB
-var RedisClient *redis.Client
-var ctx = context.Background()
+var (
+	DB          *gorm.DB
+	RedisClient *redis.Client
+	ctx         = context.Background()
+)
 
 func LoadEnv() {
 	if err := godotenv.Load(); err != nil {
