@@ -151,20 +151,22 @@ func (*MenuService) Edit(request *api.EditMenuRequest) error {
 	}
 
 	updates := map[string]any{
-		"name":       request.Name,
-		"order_num":  request.OrderNum,
-		"path":       request.Path,
-		"component":  request.Component,
-		"is_affix":   request.IsAffix,
-		"is_iframe":  request.IsIframe,
-		"is_link":    request.IsLink,
-		"keep_alive": request.KeepAlive,
-		"type":       request.Type,
-		"is_hide":    request.IsHide,
-		"status":     request.Status,
-		"perms":      request.Perms,
-		"icon":       request.Icon,
-		"url":        request.Url,
+		"name":           request.Name,
+		"order_num":      request.OrderNum,
+		"path":           request.Path,
+		"component":      request.Component,
+		"is_affix":       request.IsAffix,
+		"is_iframe":      request.IsIframe,
+		"is_link":        request.IsLink,
+		"keep_alive":     request.KeepAlive,
+		"type":           request.Type,
+		"is_hide":        request.IsHide,
+		"status":         request.Status,
+		"perms":          request.Perms,
+		"icon":           request.Icon,
+		"url":            request.Url,
+		"request_url":    request.RequestUrl,
+		"request_method": request.RequestMethod,
 	}
 	err = services.Update[models.SysMenu](id, updates)
 	return nil
