@@ -251,13 +251,17 @@ func GetUserRole() ([]models.SysUserRoleResult, error) {
 
 // Delete 删除用户
 func (*UserService) Delete(id string) error {
-	tx := models.DB.Delete(&models.SysUser{}, id)
+	var user models.SysUser
+	if err := models.DB.Where("id = ?", id).First(&user).Error; err != nil {
+		log.Println("用户不存在，ID: ", id)
+		return errors.New("用户不存在")
+	}
+	tx := models.DB.Delete(&user, id)
 	if tx.Error != nil {
 		log.Println("删除用户失败：", tx.Error)
 		return errors.New("删除用户失败")
 	}
-	// 删除用户关联角色信息
-	models.DB.Model(&models.SysUserRole{}).Where("user_id = ?", id).Delete(&models.SysUserRole{})
+	// 删除用户关联角色信息在hook中执行
 	return nil
 }
 

@@ -75,6 +75,21 @@ func (u *SysUser) BeforeUpdate(db *gorm.DB) error {
 	return nil
 }
 
+func (u *SysUser) AfterDelete(db *gorm.DB) error {
+	// 清理Casbin 用户和角色关联
+	_, err := Casbin.DeleteUserRole(u.UserName)
+	if err != nil {
+		err = fmt.Errorf("casbin删除用户角色失败：%v", err)
+		return err
+	}
+
+	// 删除用户角色
+	if err := u.deleteUserRole(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (u *SysUser) deleteUserRole() error {
 	if err := DB.Where("user_id = ?", u.ID).Delete(&SysUserRole{}).Error; err != nil {
 		err := fmt.Errorf("删除用户角色失败：%v", err)
