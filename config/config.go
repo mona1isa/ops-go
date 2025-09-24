@@ -18,6 +18,12 @@ var (
 	ctx         = context.Background()
 )
 
+func init() {
+	LoadEnv()
+	InitDB()
+	InitRedis()
+}
+
 func LoadEnv() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("Error loading .env file, Err:", err)
@@ -26,7 +32,9 @@ func LoadEnv() {
 
 func InitDB() {
 	dsn := os.Getenv("DB_DSN")
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		SkipDefaultTransaction: true,
+	})
 	if err != nil {
 		log.Println("Failed to connect to database, Err:", err)
 	}

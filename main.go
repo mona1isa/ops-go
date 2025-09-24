@@ -1,17 +1,12 @@
 package main
 
 import (
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/routers"
 	"log"
 	"os"
 )
 
 func main() {
-	config.LoadEnv()
-	config.InitDB()
-	config.InitRedis()
-
 	r := routers.Init()
 	err := r.Run(":" + os.Getenv("APP_PORT"))
 	if err != nil {
