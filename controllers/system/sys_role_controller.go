@@ -2,7 +2,6 @@ package system
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
@@ -79,7 +78,7 @@ func (s *SysRoleController) Remove(ctx *gin.Context) {
 	id, _ := strconv.Atoi(roleId)
 
 	var count int64
-	if err := config.DB.Model(models.SysUserRole{}).Where("role_id = ?", id).Count(&count).Error; err != nil {
+	if err := models.DB.Model(models.SysUserRole{}).Where("role_id = ?", id).Count(&count).Error; err != nil {
 		s.Failure(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}

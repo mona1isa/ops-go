@@ -2,7 +2,6 @@ package system
 
 import (
 	"errors"
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services"
@@ -18,7 +17,7 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 	name := request.Name
 	if name != "" {
 		var count int64
-		config.DB.Model(models.SysMenu{}).Where("name = ?", name).Count(&count)
+		models.DB.Model(models.SysMenu{}).Where("name = ?", name).Count(&count)
 		if count > 0 {
 			return errors.New("菜单名称已存在")
 		}
@@ -27,7 +26,7 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 	parentId := request.ParentId
 	if parentId != 0 {
 		var count int64
-		config.DB.Model(models.SysMenu{}).Where("id=?", parentId).Count(&count)
+		models.DB.Model(models.SysMenu{}).Where("id=?", parentId).Count(&count)
 		if count == 0 {
 			return errors.New("父菜单不存在")
 		}
@@ -54,7 +53,7 @@ func (*MenuService) Add(request *api.AddMenuRequest) error {
 	}
 	menu.CreateBy = request.CreateBy
 	menu.UpdateBy = request.UpdateBy
-	if err := config.DB.Model(models.SysMenu{}).Create(&menu).Error; err != nil {
+	if err := models.DB.Model(models.SysMenu{}).Create(&menu).Error; err != nil {
 		log.Println("新增菜单失败", err)
 		return errors.New("新增菜单失败")
 	}
@@ -67,7 +66,7 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 	menuList := make([]models.SysMenu, 0)
 
 	if isAdmin {
-		tx := config.DB.Model(models.SysMenu{}).
+		tx := models.DB.Model(models.SysMenu{}).
 			Where("type <> ? AND status = ? AND del_flag = ?", "F", "1", "0")
 		if err := tx.Find(&menuList).Error; err != nil {
 			log.Println("查询菜单列表失败", err)
@@ -75,7 +74,7 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 		}
 	} else {
 		var userRoles []models.SysUserRole
-		if err := config.DB.Model(models.SysUserRole{}).Where("user_id = ?", userId).Find(&userRoles).Error; err != nil {
+		if err := models.DB.Model(models.SysUserRole{}).Where("user_id = ?", userId).Find(&userRoles).Error; err != nil {
 			log.Println("查询用户角色失败", err)
 			return nil, errors.New("查询用户角色失败")
 		}
@@ -86,7 +85,7 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 		}
 		// 查询角色关联的菜单
 		var roleMenu []models.SysRoleMenu
-		if err := config.DB.Model(models.SysRoleMenu{}).Where("role_id in ?", roleIds).Find(&roleMenu).Error; err != nil {
+		if err := models.DB.Model(models.SysRoleMenu{}).Where("role_id in ?", roleIds).Find(&roleMenu).Error; err != nil {
 			log.Println("查询角色关联的菜单失败", err)
 			return nil, errors.New("查询角色关联的菜单失败")
 		}
@@ -96,7 +95,7 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 		}
 
 		// 查询菜单
-		tx := config.DB.Model(models.SysMenu{}).
+		tx := models.DB.Model(models.SysMenu{}).
 			Where("type <> ? AND status = ? AND del_flag = ? AND id IN ?", "F", "1", "0", menuIds)
 		if err := tx.Find(&menuList).Error; err != nil {
 			log.Println("查询菜单列表失败", err)
@@ -112,7 +111,7 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 func (*MenuService) List(request *api.MenuListRequest) ([]*api.MenuTree, error) {
 	menuList := make([]models.SysMenu, 0)
 
-	query := config.DB.Model(models.SysMenu{})
+	query := models.DB.Model(models.SysMenu{})
 	var scopes []func(db *gorm.DB) *gorm.DB
 	name := request.Name
 	if name != "" {
@@ -145,7 +144,7 @@ func (*MenuService) Edit(request *api.EditMenuRequest) error {
 	}
 
 	var count int64
-	config.DB.Model(models.SysMenu{}).Where("name = ? and id <> ?", request.Name, id).Count(&count)
+	models.DB.Model(models.SysMenu{}).Where("name = ? and id <> ?", request.Name, id).Count(&count)
 	if count > 0 {
 		return errors.New("菜单名称已存在")
 	}

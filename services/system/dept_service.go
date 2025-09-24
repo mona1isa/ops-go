@@ -2,7 +2,6 @@ package system
 
 import (
 	"errors"
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services"
@@ -16,7 +15,7 @@ type DeptService struct {
 func (d *DeptService) Add(request *api.AddDeptRequest) error {
 	name := request.Name
 	var count int64
-	config.DB.Model(models.SysDept{}).Where("name = ?", name).Count(&count)
+	models.DB.Model(models.SysDept{}).Where("name = ?", name).Count(&count)
 	if count > 0 {
 		return errors.New("部门名称已存在")
 	}
@@ -44,7 +43,7 @@ func (d *DeptService) Edit(request *api.EditDeptRequest) error {
 	id := request.Id
 	name := request.Name
 	var count int64
-	config.DB.Model(models.SysDept{}).Where("id = ? and name <> ?", id, name).Count(&count)
+	models.DB.Model(models.SysDept{}).Where("id = ? and name <> ?", id, name).Count(&count)
 	if count > 0 {
 		return errors.New("部门名称已存在")
 	}
@@ -67,7 +66,7 @@ func (d *DeptService) Edit(request *api.EditDeptRequest) error {
 func (d *DeptService) GetTree() ([]*api.DeptTree, error) {
 	deptList := make([]models.SysDept, 0)
 
-	tx := config.DB.Model(models.SysDept{}).Where(" del_flag = ?", "0")
+	tx := models.DB.Model(models.SysDept{}).Where(" del_flag = ?", "0")
 	if tx.Find(&deptList); tx.Error != nil {
 		log.Println("查询部门失败：", tx.Error)
 		return nil, errors.New("查询部门失败")
@@ -107,7 +106,7 @@ func convertToTree(dept models.SysDept) *api.DeptTree {
 // List 部门列表
 func (d *DeptService) List(request *api.QueryDeptRequest) ([]models.SysDept, error) {
 	var deptList []models.SysDept
-	tx := config.DB.Where("del_flag = ?", "0")
+	tx := models.DB.Where("del_flag = ?", "0")
 	if request.Name != "" {
 		tx = tx.Where("name = ?", request.Name)
 	}
@@ -118,13 +117,13 @@ func (d *DeptService) List(request *api.QueryDeptRequest) ([]models.SysDept, err
 // Delete 删除部门
 func (d *DeptService) Delete(id int) error {
 	var count int64
-	config.DB.Model(models.SysDept{}).Where("parent_id = ?", id).Count(&count)
+	models.DB.Model(models.SysDept{}).Where("parent_id = ?", id).Count(&count)
 	if count > 0 {
 		return errors.New("该部门下有子部门，无法删除")
 	}
 
 	var deptUserCount int64
-	config.DB.Model(models.SysUser{}).Where("dept_id = ?", id).Count(&deptUserCount)
+	models.DB.Model(models.SysUser{}).Where("dept_id = ?", id).Count(&deptUserCount)
 	if deptUserCount > 0 {
 		return errors.New("该部门下有用户，无法删除")
 	}
@@ -138,7 +137,7 @@ func (d *DeptService) Delete(id int) error {
 
 func (d *DeptService) UpdateStatus(request *api.DeptStatusRequest) error {
 	id := request.Id
-	if err := config.DB.Model(models.SysDept{}).Where("id = ?", id).Update("status", request.Status).Error; err != nil {
+	if err := models.DB.Model(models.SysDept{}).Where("id = ?", id).Update("status", request.Status).Error; err != nil {
 		log.Println("更新部门状态失败：", err)
 		return errors.New("更新部门状态失败")
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/models"
 	"log"
 	"net/http"
@@ -121,7 +120,7 @@ func ValidateToken(tokenString string) (*CustomClaims, error) {
 // CheckToken 校验用户token
 func CheckToken(userToken string) bool {
 	sysUserToken := models.SysUserToken{}
-	if err := config.DB.Model(models.SysUserToken{}).Where("token = ?", userToken).First(&sysUserToken).Error; err != nil {
+	if err := models.DB.Model(models.SysUserToken{}).Where("token = ?", userToken).First(&sysUserToken).Error; err != nil {
 		log.Println("用户token 不存在", err)
 		return false
 	}
@@ -151,7 +150,7 @@ func InvalidateToken(tokenString string) error {
 		userToken := models.SysUserToken{
 			Token: claims.Token,
 		}
-		config.DB.Delete(&models.SysUserToken{}, userToken)
+		models.DB.Delete(&models.SysUserToken{}, userToken)
 		return nil
 	}
 	return nil

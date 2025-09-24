@@ -3,7 +3,6 @@ package middleware
 import (
 	"bytes"
 	"github.com/gin-gonic/gin"
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/models"
 	"io"
 	"strconv"
@@ -47,7 +46,7 @@ func LogMiddleware() gin.HandlerFunc {
 			sysLog.Resp = writer.body.String()
 			sysLog.StatusCode = strconv.Itoa(c.Writer.Status())
 			sysLog.CostTimeMs = time.Since(start).Milliseconds()
-			config.DB.Create(&sysLog)
+			models.DB.Create(&sysLog)
 		}()
 	}
 }

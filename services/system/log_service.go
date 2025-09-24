@@ -1,7 +1,6 @@
 package system
 
 import (
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
 	"gorm.io/gorm"
@@ -25,7 +24,7 @@ func (s *LogService) Page(request *api.LogRequest) (models.PageResult[models.Sys
 	if uri != "" {
 		scopes = append(scopes, RequestUrlScope(uri))
 	}
-	pageResult, err := models.Paginate[models.SysLog](config.DB, pageNum, pageSize, scopes...)
+	pageResult, err := models.Paginate[models.SysLog](models.DB, pageNum, pageSize, scopes...)
 	if err != nil {
 		panic(err)
 	}

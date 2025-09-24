@@ -13,7 +13,7 @@ func (SysUserRole) TableName() string {
 
 // SysUserRoleResult 用户角色查询结果集
 type SysUserRoleResult struct {
-	UserID   int    `gorm:"column:userId" json:"userId"`
+	UserId   int    `gorm:"column:userId" json:"userId"`
 	RoleName string `gorm:"column:roleName" json:"roleName"`
-	RoleID   int    `gorm:"column:roleId" json:"roleId"`
+	RoleId   int    `gorm:"column:roleId" json:"roleId"`
 }

@@ -12,7 +12,7 @@ type UserRequest struct {
 	Nickname  string    `json:"nickname"`
 	Email     string    `json:"email" binding:"email"`
 	Phone     string    `json:"phone" binding:"required"`
-	RoleId    int       `json:"roleId" binding:"required"`
+	RoleIds   []int     `json:"roleIds" binding:"required"`
 	Sex       int       `json:"sex"`
 	Avatar    string    `json:"avatar"`
 	Password  string    `json:"password"`
@@ -40,7 +40,7 @@ type PageUserRequest struct {
 type EditUserRequest struct {
 	Id        int       `json:"id" binding:"required"`
 	DeptId    int       `json:"deptId"`
-	RoleId    int       `json:"roleId"`
+	RoleIds   []int     `json:"roleIds"`
 	UserName  string    `json:"userName"`
 	Nickname  string    `json:"nickname"`
 	Email     string    `json:"email" binding:"email"`
@@ -59,15 +59,15 @@ type UserStatusRequest struct {
 }
 
 type UserInfo struct {
-	Id       int    `json:"id"`
-	DeptId   int    `json:"deptId"`
-	UserName string `json:"username"`
-	Nickname string `json:"nickname"`
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
-	Sex      int    `json:"sex"`
-	Avatar   string `json:"avatar"`
-	Status   string `json:"status"`
-	RoleId   int    `json:"roleId"`
-	RoleName string `json:"roleName"`
+	Id        int    `json:"id"`
+	DeptId    int    `json:"deptId"`
+	UserName  string `json:"username"`
+	Nickname  string `json:"nickname"`
+	Email     string `json:"email"`
+	Phone     string `json:"phone"`
+	Sex       int    `json:"sex"`
+	Avatar    string `json:"avatar"`
+	Status    string `json:"status"`
+	RoleIds   []int  `json:"roleIds"`
+	RoleNames string `json:"roleNames"`
 }

@@ -3,7 +3,6 @@ package system
 import (
 	"errors"
 	"fmt"
-	"github.com/zhany/ops-go/config"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
@@ -33,7 +32,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	// 验证用户信息
 	username := request.Username
 	var user models.SysUser
-	config.DB.First(&user, "user_name=?", username)
+	models.DB.First(&user, "user_name=?", username)
 	if user.UserName == "" && user.UserName == username {
 		return "", errors.New("用户不存在")
 	}
@@ -68,14 +67,14 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	}
 	// 先查询是否存在记录，存在则更新，不存在则创建记录
 	var tokenCount int64
-	config.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Count(&tokenCount)
+	models.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Count(&tokenCount)
 	if tokenCount > 0 {
-		if err := config.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Updates(&userToken).Error; err != nil {
+		if err := models.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Updates(&userToken).Error; err != nil {
 			log.Println("更新用户Token失败：", err)
 			return "", err
 		}
 	} else {
-		if err := config.DB.Create(&userToken).Error; err != nil {
+		if err := models.DB.Create(&userToken).Error; err != nil {
 			log.Println("创建用户Token失败：", err)
 			return "", err
 		}
@@ -84,7 +83,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	// 更新用户登录信息
 	user.LoginIP = request.LoginIP
 	user.LoginDate = request.LoginDate
-	config.DB.Updates(&user)
+	models.DB.Updates(&user)
 	return jwt, nil
 }
 
@@ -99,32 +98,35 @@ func (u *UserService) LogOut(tokenString string) {
 // GetUserInfo 获取用户信息
 func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
 	user := models.SysUser{}
-	if err := config.DB.Model(&models.SysUser{}).Where("id = ?", userId).First(&user).Error; err != nil {
+	if err := models.DB.Model(&models.SysUser{}).Where("id = ?", userId).First(&user).Error; err != nil {
 		return nil, errors.New("用户不存在")
 	}
 
-	userRole := models.SysUserRole{}
-	if err := config.DB.Model(&models.SysUserRole{}).Where("user_id = ?", userId).First(&userRole).Error; err != nil {
-		return nil, errors.New("用户角色不存在")
+	roleIds := make([]int, 0)
+	var roleNames string
+	userRole, err := GetUserRole()
+	if err != nil {
+		log.Println("查询用户角色异常：", err)
 	}
-
-	role := models.SysRole{}
-	if err := config.DB.Model(&models.SysRole{}).Where("id = ?", userRole.RoleId).First(&role).Error; err != nil {
-		return nil, errors.New("角色不存在")
+	for _, v := range userRole {
+		if v.UserId == user.ID {
+			roleIds = append(roleIds, v.RoleId)
+			roleNames += v.RoleName + ","
+		}
 	}
 
 	userInfo := &api.UserInfo{
-		Id:       user.ID,
-		DeptId:   user.DeptId,
-		UserName: user.UserName,
-		Nickname: user.NickName,
-		Email:    user.Email,
-		Phone:    user.Phone,
-		Sex:      user.Sex,
-		Avatar:   user.Avatar,
-		Status:   user.Status,
-		RoleId:   userRole.RoleId,
-		RoleName: role.Name,
+		Id:        user.ID,
+		DeptId:    user.DeptId,
+		UserName:  user.UserName,
+		Nickname:  user.NickName,
+		Email:     user.Email,
+		Phone:     user.Phone,
+		Sex:       user.Sex,
+		Avatar:    user.Avatar,
+		Status:    user.Status,
+		RoleIds:   roleIds,
+		RoleNames: roleNames,
 	}
 
 	return userInfo, nil
@@ -147,57 +149,44 @@ func (u *UserService) AddUser(request api.UserRequest) error {
 		Sex:      request.Sex,
 		Avatar:   request.Avatar,
 		Status:   request.Status,
+		RoleIds:  request.RoleIds,
 	}
 	// 加密存储密码
 	user.Password = hashedPassword
-	if err := config.DB.Create(&user).Error; err != nil {
+	if err := models.DB.Create(&user).Error; err != nil {
 		log.Println("添加用户失败：", err)
 		return err
 	}
-	// 保存用户角色
-	userRole := models.SysUserRole{
-		UserId: user.ID,
-		RoleId: request.RoleId,
-	}
-	if err := config.DB.Create(&userRole).Error; err != nil {
-		log.Println("保存用户角色失败：", err)
-		return err
-	}
+	// 保存用户角色移动到 Hook 中执行
+
 	return nil
 }
 
 // EditUser 编辑用户
 func (u *UserService) EditUser(request api.EditUserRequest) error {
 	id := request.Id
-	var count int64
-	user := models.SysUser{}
-	config.DB.Model(&user).Where("id = ?", id).Count(&count)
-	if count == 0 {
+	var user models.SysUser
+	if err := models.DB.Where("id = ?", id).First(&user).Error; err != nil {
 		log.Println("用户不存在，ID: ", id)
 		return errors.New("用户不存在")
 	}
-	result := config.DB.Model(&models.SysUser{}).Where("id = ?", id).Updates(models.SysUser{
-		DeptId:   request.DeptId,
-		UserName: request.UserName,
-		NickName: request.Nickname,
-		Email:    request.Email,
-		Phone:    request.Phone,
-		Sex:      request.Sex,
-		Avatar:   request.Avatar,
-		Status:   request.Status,
-	})
+	user.DeptId = request.DeptId
+	user.UserName = request.UserName
+	user.NickName = request.Nickname
+	user.Email = request.Email
+	user.Phone = request.Phone
+	user.Sex = request.Sex
+	user.Avatar = request.Avatar
+	user.Status = request.Status
+	user.RoleIds = request.RoleIds
+	result := models.DB.Save(&user)
 	if result.RowsAffected == 0 {
 		log.Println("更新用户失败：", result.Error)
 		errInfo := fmt.Sprintf("更新用户失败：%s", result.Error)
 		return errors.New(errInfo)
 	}
-	// 修改角色
-	if request.RoleId != 0 {
-		if err := config.DB.Model(&models.SysUserRole{}).Where("user_id = ?", id).Updates(models.SysUserRole{RoleId: request.RoleId}).Error; err != nil {
-			log.Println("更新用户角色失败：", err)
-			return errors.New("更新用户角色失败" + err.Error())
-		}
-	}
+	// 修改角色逻辑移动到Hook中执行
+
 	return nil
 }
 
@@ -212,7 +201,7 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 		scopes = append(scopes, UserNameScope(userNmae))
 	}
 
-	pageResult, err := models.Paginate[models.SysUser](config.DB, pageNum, pageSize, scopes...)
+	pageResult, err := models.Paginate[models.SysUser](models.DB, pageNum, pageSize, scopes...)
 	if err != nil {
 		log.Println("查询用户列表异常：", err)
 		panic(err)
@@ -234,12 +223,17 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 			}
 		}
 		// 赋值角色信息
+		roleNames := ""
+		roleIds := make([]int, 0)
 		for _, role := range userRole {
-			if user.ID == role.UserID {
-				pageResult.Data[idx].RoleName = role.RoleName
-				pageResult.Data[idx].RoleId = role.RoleID
+			if user.ID == role.UserId {
+				roleNames = roleNames + role.RoleName + ","
+				roleIds = append(roleIds, role.RoleId)
 			}
 		}
+		roleNames = strings.TrimRight(roleNames, ",")
+		pageResult.Data[idx].RoleNames = roleNames
+		pageResult.Data[idx].RoleIds = roleIds
 	}
 
 	return pageResult, nil
@@ -247,7 +241,7 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 
 func GetUserRole() ([]models.SysUserRoleResult, error) {
 	var result []models.SysUserRoleResult
-	err := config.DB.Model(&models.SysUser{}).Joins("JOIN sys_user_role ON sys_user_role.user_id = sys_user.id").
+	err := models.DB.Model(&models.SysUser{}).Joins("JOIN sys_user_role ON sys_user_role.user_id = sys_user.id").
 		Joins("JOIN sys_role ON sys_role.id = sys_user_role.role_id").Select("sys_user.id AS userId, sys_role.name AS roleName, sys_role.id AS roleId").Scan(&result).Error
 	if err != nil {
 		return result, err
@@ -257,20 +251,20 @@ func GetUserRole() ([]models.SysUserRoleResult, error) {
 
 // Delete 删除用户
 func (*UserService) Delete(id string) error {
-	tx := config.DB.Delete(&models.SysUser{}, id)
+	tx := models.DB.Delete(&models.SysUser{}, id)
 	if tx.Error != nil {
 		log.Println("删除用户失败：", tx.Error)
 		return errors.New("删除用户失败")
 	}
 	// 删除用户关联角色信息
-	config.DB.Model(&models.SysUserRole{}).Where("user_id = ?", id).Delete(&models.SysUserRole{})
+	models.DB.Model(&models.SysUserRole{}).Where("user_id = ?", id).Delete(&models.SysUserRole{})
 	return nil
 }
 
 // ChangeStatus 修改用户状态
 func (*UserService) ChangeStatus(request api.UserStatusRequest) error {
 	id := request.Id
-	config.DB.Model(&models.SysUser{}).Where("id = ?", id).Update("status", request.Status)
+	models.DB.Model(&models.SysUser{}).Where("id = ?", id).Update("status", request.Status)
 	return nil
 }
 
