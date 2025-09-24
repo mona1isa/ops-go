@@ -82,3 +82,8 @@ func (u *SysUser) deleteUserRole() error {
 	}
 	return nil
 }
+
+// UpdateLoginInfo 只更新部分信息不需要执行 hook 函数时使用
+func (u *SysUser) UpdateLoginInfo() {
+	DB.Model(u).UpdateColumn("login_ip,login_date", map[string]any{"login_ip": u.LoginIP, "login_date": u.LoginDate})
+}

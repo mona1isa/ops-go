@@ -83,7 +83,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	// 更新用户登录信息
 	user.LoginIP = request.LoginIP
 	user.LoginDate = request.LoginDate
-	models.DB.Updates(&user)
+	user.UpdateLoginInfo()
 	return jwt, nil
 }
 
