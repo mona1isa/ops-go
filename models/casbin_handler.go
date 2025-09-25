@@ -44,8 +44,8 @@ func (c *CasbinHandler) Enforcer(user, uri, method string) (bool, error) {
 }
 
 // AddPolicy 添加策略
-func (c *CasbinHandler) AddPolicy(roleId string, uri, method string) (bool, error) {
-	return c.syncedEnforcer.AddPolicy(roleId, uri, method)
+func (c *CasbinHandler) AddPolicy(roleId int, uri, method string) (bool, error) {
+	return c.syncedEnforcer.AddPolicy(c.MakeRoleName(roleId), uri, method)
 }
 
 // MakeRoleName 拼接角色ID，为了防止角色与用户名冲突
@@ -70,6 +70,20 @@ func (c *CasbinHandler) DeleteRolePolicy(roleId int) (bool, error) {
 // DeleteRoleUser 删除角色下的用户
 func (c *CasbinHandler) DeleteRoleUser(roleId int) (bool, error) {
 	return c.syncedEnforcer.RemoveFilteredNamedPolicy("g", 1, c.MakeRoleName(roleId))
+}
+
+// ClearUserRole 清除用户角色
+func (c *CasbinHandler) ClearUserRole(roleId int, user string) (bool, error) {
+	return c.syncedEnforcer.RemoveFilteredNamedGroupingPolicy("g", 1, c.MakeRoleName(roleId), user)
+}
+
+// HasRoleForUser 判断用户是否存在指定角色
+func (c *CasbinHandler) HasRoleForUser(roleId int, user string) (bool, error) {
+	return c.syncedEnforcer.HasRoleForUser(user, c.MakeRoleName(roleId))
+}
+
+func (c *CasbinHandler) DeleteRoleForUser(roleId int, user string) (bool, error) {
+	return c.syncedEnforcer.DeleteRoleForUser(c.MakeRoleName(roleId), user)
 }
 
 // AddUserRole 添加用户角色

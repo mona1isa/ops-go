@@ -45,6 +45,16 @@ func (r *RoleService) Add(request *api.RoleRequest) error {
 		log.Println("添加角色权限失败：", err.Error())
 		return errors.New("添加角色权限失败：" + err.Error())
 	}
+	// 将角色关联的菜单权限同步casbin 策略中
+	var menus []models.SysMenu
+	if err := models.DB.Where("id in ?", request.MenuIds).Find(&menus).Error; err != nil {
+		log.Println("查询菜单异常：", err.Error())
+		return errors.New("查询菜单异常：" + err.Error())
+	}
+	if err := saveCasbinPolicy(roleId, menus); err != nil {
+		log.Println("保存casbin策略异常：", err.Error())
+		return errors.New("保存casbin策略异常：" + err.Error())
+	}
 	return nil
 }
 
@@ -63,7 +73,7 @@ func (r *RoleService) Edit(request *api.EditRoleRequest) error {
 		Status:   request.Status,
 	}
 	role.Remark = request.Remark
-	if err := models.DB.Model(&models.SysRole{}).Where("id = ?", id).Updates(role).Error; err != nil {
+	if err := models.DB.Where("id = ?", id).Updates(&role).Error; err != nil {
 		log.Println("编辑角色失败：", err.Error())
 		return errors.New("编辑角色失败：" + err.Error())
 	}
@@ -114,6 +124,11 @@ func (r *RoleService) Remove(id int) error {
 	if err := models.DB.Delete(&models.SysRole{}, id).Error; err != nil {
 		return errors.New("角色删除失败: " + err.Error())
 	}
+	// 删除 Casbin 权限
+	_, err := models.Casbin.DeleteRolePolicy(id)
+	if err != nil {
+		log.Println("删除Casbin 策略失败：", err.Error())
+	}
 	return nil
 }
 
@@ -158,6 +173,17 @@ func saveRoleMenu(menuIds []int, roleId int) error {
 			return errors.New("保存角色菜单失败: " + err.Error())
 		}
 	}
+
+	var menus []models.SysMenu
+	if err := models.DB.Where("id in ?", menuIds).Find(&menus).Error; err != nil {
+		return errors.New("查询菜单失败: " + err.Error())
+	}
+	// 将角色关联的菜单权限同步casbin 策略中
+	err := saveCasbinPolicy(roleId, menus)
+	if err != nil {
+		log.Println("保存casbin策略失败: " + err.Error())
+		return nil
+	}
 	return nil
 }
 
@@ -171,8 +197,46 @@ func saveUserRole(userIds []int, roleId int) error {
 	models.DB.Model(&models.SysUserRole{}).Where("role_id = ?", roleId).Delete(&models.SysUserRole{})
 
 	// 添加新的角色用户
+	var userRoles []models.SysUserRole
 	for _, userId := range userIds {
-		models.DB.Create(&models.SysUserRole{RoleId: roleId, UserId: userId})
+		userRoles = append(userRoles, models.SysUserRole{RoleId: roleId, UserId: userId})
 	}
+	models.DB.Create(&userRoles)
+
+	// 同步Casbin 权限
+	_, err := models.Casbin.DeleteRoleUser(roleId)
+	if err != nil {
+		log.Println("删除Casbin 用户角色失败：", err.Error())
+	}
+	var users []models.SysUser
+	_ = models.DB.Where("id in ?", userIds).Find(&users).Error
+	for _, user := range users {
+		_, err := models.Casbin.AddUserRole(user.UserName, roleId)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func saveCasbinPolicy(roleId int, menus []models.SysMenu) error {
+	// 删除旧的角色策略
+	_, err := models.Casbin.DeleteRolePolicy(roleId)
+	if err != nil {
+		log.Fatalln("删除旧的角色策略失败：", err.Error())
+	}
+	// 添加新的角色策略
+	for _, menu := range menus {
+		url := menu.RequestUrl
+		method := menu.RequestMethod
+		if url != "" && method != "" {
+			_, err := models.Casbin.AddPolicy(roleId, url, method)
+			if err != nil {
+				log.Fatalln("添加策略失败：", err.Error())
+				return err
+			}
+		}
+	}
+
 	return nil
 }
