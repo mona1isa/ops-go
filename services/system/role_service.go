@@ -150,6 +150,44 @@ func (r *RoleService) GetUserIds(roleId int) []int {
 	return userIds
 }
 
+// GetAsignUserInfo 获取角色分配用户信息
+func (r *RoleService) GetAsignUserInfo(roleId int) map[string]any {
+	var result = make(map[string]any)
+	// 已分配用户
+	var userIds []int
+	models.DB.Model(models.SysUserRole{}).Select("user_id").Where("role_id = ?", roleId).Find(&userIds)
+
+	// 所有用户
+	var allUserList []models.SysUser
+	models.DB.Where("del_flag = ? and status = ?", "0", "1").Find(&allUserList)
+
+	// 分组
+	assignedUsers := make([]map[string]any, 0)
+	unassignedUsers := make([]map[string]any, 0)
+	for _, user := range allUserList {
+		found := false
+		for _, id := range userIds {
+			if user.ID == id {
+				found = true
+				break
+			}
+		}
+		userInfo := map[string]any{
+			"id":   user.ID,
+			"name": user.NickName,
+		}
+		if found {
+			assignedUsers = append(assignedUsers, userInfo)
+		} else {
+			unassignedUsers = append(unassignedUsers, userInfo)
+		}
+	}
+
+	result["assigned"] = assignedUsers
+	result["unassigned"] = unassignedUsers
+	return result
+}
+
 // RoleAsignUsers 角色授权
 func (r *RoleService) RoleAsignUsers(request api.RoleAsignRequest) error {
 	roleId := request.RoleId

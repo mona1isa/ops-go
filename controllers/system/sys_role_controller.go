@@ -116,6 +116,15 @@ func (s *SysRoleController) GetUserIds(ctx *gin.Context) {
 	s.Success(ctx, userIds)
 }
 
+// GetAsignMenuInfo 获取角色分配用户信息
+func (s *SysRoleController) GetAsignUserInfo(ctx *gin.Context) {
+	roleId := ctx.Param("roleId")
+	id, _ := strconv.Atoi(roleId)
+
+	service := system.RoleService{}
+	service.GetAsignUserInfo(id)
+}
+
 // RoleAsignUsers 角色分配用户
 func (s *SysRoleController) RoleAsignUsers(ctx *gin.Context) {
 	roleAsignRequest := api.RoleAsignRequest{}
