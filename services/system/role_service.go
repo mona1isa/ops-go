@@ -153,6 +153,12 @@ func (r *RoleService) GetUserIds(roleId int) []int {
 // GetAsignUserInfo 获取角色分配用户信息
 func (r *RoleService) GetAsignUserInfo(roleId int) map[string]any {
 	var result = make(map[string]any)
+	var count int64
+	models.DB.Model(&models.SysRole{}).Where("id = ?", roleId).Find(&count)
+	if count == 0 {
+		return result
+	}
+
 	// 已分配用户
 	var userIds []int
 	models.DB.Model(models.SysUserRole{}).Select("user_id").Where("role_id = ?", roleId).Find(&userIds)

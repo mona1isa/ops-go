@@ -19,5 +19,6 @@ func (*RoleRouter) Setup(r *gin.RouterGroup) {
 		roleGroup.GET("/menu/:roleId", sr.GetMenuIds)
 		roleGroup.GET("/user/:roleId", sr.GetUserIds)
 		roleGroup.POST("/assignUsers", sr.RoleAsignUsers)
+		roleGroup.GET("/assignUserInfo/:roleId", sr.GetAsignUserInfo)
 	}
 }
