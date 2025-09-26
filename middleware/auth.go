@@ -26,7 +26,7 @@ var issuer = os.Getenv("JWT_ISSUER")
 var secret = os.Getenv("JWT_SECRET")
 
 // URL 白名单
-var excludePaths = [...]string{
+var ExcludePaths = [...]string{
 	"/api/captcha/generate",
 	"/api/user/login",
 }
@@ -34,7 +34,7 @@ var excludePaths = [...]string{
 func AuthMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		currentPath := ctx.Request.URL.Path
-		for _, path := range excludePaths {
+		for _, path := range ExcludePaths {
 			if match, _ := filepath.Match(path, currentPath); match {
 				ctx.Next()
 				return

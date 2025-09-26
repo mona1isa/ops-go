@@ -124,6 +124,10 @@ func (r *RoleService) Remove(id int) error {
 	if err := models.DB.Delete(&models.SysRole{}, id).Error; err != nil {
 		return errors.New("角色删除失败: " + err.Error())
 	}
+	// 删除角色菜单
+	if err := models.DB.Where("role_id = ?", id).Delete(&models.SysRoleMenu{}).Error; err != nil {
+		return errors.New("删除角色菜单失败: " + err.Error())
+	}
 	// 删除 Casbin 权限
 	_, err := models.Casbin.DeleteRolePolicy(id)
 	if err != nil {
@@ -158,6 +162,7 @@ func (r *RoleService) RoleAsignUsers(request api.RoleAsignRequest) error {
 		return errors.New("角色已禁用，无法授权")
 	}
 
+	// 删除旧的角色用户
 	_ = saveUserRole(request.UserIds, roleId)
 	return nil
 }
@@ -189,33 +194,33 @@ func saveRoleMenu(menuIds []int, roleId int) error {
 
 // saveUserRole 保存用户角色
 func saveUserRole(userIds []int, roleId int) error {
-	if len(userIds) == 0 {
-		return nil
-	}
-
 	// 删除旧的角色用户
 	models.DB.Model(&models.SysUserRole{}).Where("role_id = ?", roleId).Delete(&models.SysUserRole{})
+	// 同步删除 Casbin 权限
+	_, _ = models.Casbin.DeleteRole(roleId)
 
 	// 添加新的角色用户
-	var userRoles []models.SysUserRole
-	for _, userId := range userIds {
-		userRoles = append(userRoles, models.SysUserRole{RoleId: roleId, UserId: userId})
-	}
-	models.DB.Create(&userRoles)
+	if len(userIds) > 0 {
+		var userRoles []models.SysUserRole
+		for _, userId := range userIds {
+			userRoles = append(userRoles, models.SysUserRole{RoleId: roleId, UserId: userId})
+		}
+		models.DB.Create(&userRoles)
 
-	// 同步Casbin 权限
-	_, err := models.Casbin.DeleteRoleUser(roleId)
-	if err != nil {
-		log.Println("删除Casbin 用户角色失败：", err.Error())
-	}
-	var users []models.SysUser
-	_ = models.DB.Where("id in ?", userIds).Find(&users).Error
-	for _, user := range users {
-		_, err := models.Casbin.AddUserRole(user.UserName, roleId)
+		// 同步 Casbin 用户角色
+		var users []models.SysUser
+		_ = models.DB.Where("id in ?", userIds).Find(&users).Error
+		var names []string
+		for _, user := range users {
+			names = append(names, user.UserName)
+		}
+		roles, err := models.Casbin.AddUserRoles(names, []int{roleId})
 		if err != nil {
-			return err
+			log.Println(roles)
+			log.Println("添加用户角色同步Casbin异常：", err)
 		}
 	}
+
 	return nil
 }
 

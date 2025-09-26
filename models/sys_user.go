@@ -34,14 +34,15 @@ func (SysUser) TableName() string {
 // AfterCreate  创建用户后，添加用户角色并同步Casbin
 func (u *SysUser) AfterCreate(db *gorm.DB) error {
 	// casbin 添加用户角色
-	_, err := Casbin.AddUserRoles([]string{u.UserName}, u.RoleIds)
-	if err != nil {
-		err = fmt.Errorf("casbin添加用户角色失败：%v", err)
-		return err
-	}
-	// 批量保存用户角色
 	roleIds := u.RoleIds
-	if len(roleIds) > 0 {
+	if len(u.RoleIds) > 0 {
+		_, err := Casbin.AddUserRoles([]string{u.UserName}, u.RoleIds)
+		if err != nil {
+			err = fmt.Errorf("casbin添加用户角色失败：%v", err)
+			return err
+		}
+
+		// 批量保存用户角色
 		for _, roleId := range roleIds {
 			userRole := SysUserRole{
 				UserId: u.ID,

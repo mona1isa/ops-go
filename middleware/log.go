@@ -37,6 +37,7 @@ func LogMiddleware() gin.HandlerFunc {
 		url := c.Request.URL
 		start := time.Now()
 		c.Next()
+		costTime := time.Since(start).Milliseconds()
 		go func() {
 			sysLog := models.SysLog{}
 			sysLog.IpAddr = c.ClientIP()
@@ -45,7 +46,7 @@ func LogMiddleware() gin.HandlerFunc {
 			sysLog.Params = string(reqBody)
 			sysLog.Resp = writer.body.String()
 			sysLog.StatusCode = strconv.Itoa(c.Writer.Status())
-			sysLog.CostTimeMs = time.Since(start).Milliseconds()
+			sysLog.CostTimeMs = costTime
 			models.DB.Create(&sysLog)
 		}()
 	}

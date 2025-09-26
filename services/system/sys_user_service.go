@@ -268,7 +268,16 @@ func (*UserService) Delete(id string) error {
 // ChangeStatus 修改用户状态
 func (*UserService) ChangeStatus(request api.UserStatusRequest) error {
 	id := request.Id
-	models.DB.Model(&models.SysUser{}).Where("id = ?", id).Update("status", request.Status)
+	var user models.SysUser
+	if err := models.DB.Where("id = ?", id).First(&user).Error; err != nil {
+		log.Println("用户不存在，ID: ", id)
+		return errors.New("用户不存在")
+	}
+	user.Status = request.Status
+	if err := models.DB.Save(&user).Error; err != nil {
+		log.Println("更新用户状态失败：", err)
+		return errors.New("更新用户状态失败")
+	}
 	return nil
 }
 

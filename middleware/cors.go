@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func Cors() gin.HandlerFunc {
+func CorsMiddleware() gin.HandlerFunc {
 	return cors.New(cors.Config{
 		// 允许的源（域名或IP地址），开发阶段可以放行全部，生产环境应严格限制
 		//AllowOrigins: []string{"http://localhost:8080", "http://192.168.124.22:8080", "https://ops-go.com"},
