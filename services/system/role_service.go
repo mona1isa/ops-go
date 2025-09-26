@@ -154,7 +154,7 @@ func (r *RoleService) GetUserIds(roleId int) []int {
 func (r *RoleService) GetAsignUserInfo(roleId int) map[string]any {
 	var result = make(map[string]any)
 	var count int64
-	models.DB.Model(&models.SysRole{}).Where("id = ?", roleId).Find(&count)
+	models.DB.Model(&models.SysRole{}).Where("id = ?", roleId).Count(&count)
 	if count == 0 {
 		return result
 	}

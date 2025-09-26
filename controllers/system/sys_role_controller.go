@@ -122,7 +122,8 @@ func (s *SysRoleController) GetAsignUserInfo(ctx *gin.Context) {
 	id, _ := strconv.Atoi(roleId)
 
 	service := system.RoleService{}
-	service.GetAsignUserInfo(id)
+	info := service.GetAsignUserInfo(id)
+	s.Success(ctx, info)
 }
 
 // RoleAsignUsers 角色分配用户
