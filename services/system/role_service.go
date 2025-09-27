@@ -207,7 +207,7 @@ func (r *RoleService) RoleAsignUsers(request api.RoleAsignRequest) error {
 	}
 
 	// 删除旧的角色用户
-	_ = saveUserRole(request.UserIds, roleId)
+	_ = saveUserRole(request.AddedUserIds, request.RemovedUserIds, roleId)
 	return nil
 }
 
@@ -237,23 +237,32 @@ func saveRoleMenu(menuIds []int, roleId int) error {
 }
 
 // saveUserRole 保存用户角色
-func saveUserRole(userIds []int, roleId int) error {
-	// 删除旧的角色用户
-	models.DB.Model(&models.SysUserRole{}).Where("role_id = ?", roleId).Delete(&models.SysUserRole{})
-	// 同步删除 Casbin 权限
-	_, _ = models.Casbin.DeleteRole(roleId)
+func saveUserRole(addedUserIds []int, removedUserIds []int, roleId int) error {
+	// 删除用户角色
+	if len(removedUserIds) > 0 {
+		models.DB.Where("role_id = ? and user_id in ?", roleId, removedUserIds).Delete(&models.SysUserRole{})
+
+		var users []models.SysUser
+		models.DB.Where("id in ?", removedUserIds).Find(&users)
+		for _, user := range users {
+			_, err := models.Casbin.DeleteRoleForUser(roleId, user.UserName)
+			if err != nil {
+				log.Printf("删除用户角色同步Casbin异常：username=%s, err=%s\n", user.UserName, err)
+			}
+		}
+	}
 
 	// 添加新的角色用户
-	if len(userIds) > 0 {
+	if len(addedUserIds) > 0 {
 		var userRoles []models.SysUserRole
-		for _, userId := range userIds {
+		for _, userId := range addedUserIds {
 			userRoles = append(userRoles, models.SysUserRole{RoleId: roleId, UserId: userId})
 		}
 		models.DB.Create(&userRoles)
 
 		// 同步 Casbin 用户角色
 		var users []models.SysUser
-		_ = models.DB.Where("id in ?", userIds).Find(&users).Error
+		_ = models.DB.Where("id in ?", addedUserIds).Find(&users).Error
 		var names []string
 		for _, user := range users {
 			names = append(names, user.UserName)

@@ -28,6 +28,7 @@ type PageRoleRequest struct {
 }
 
 type RoleAsignRequest struct {
-	UserIds []int `json:"userIds" binding:"required"`
-	RoleId  int   `json:"roleId" binding:"required"`
+	AddedUserIds   []int `json:"addedUserIds"`
+	RemovedUserIds []int `json:"removedUserIds"`
+	RoleId         int   `json:"roleId"`
 }
