@@ -2,10 +2,13 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/gin-gonic/gin"
+	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -49,6 +52,17 @@ func LogMiddleware() gin.HandlerFunc {
 			sysLog.RequestUri = url.RequestURI()
 			sysLog.Method = c.Request.Method
 			sysLog.Params = string(reqBody)
+			if strings.Contains(sysLog.RequestUri, "login") {
+				r := api.LoginRequest{}
+				err := json.Unmarshal(reqBody, &r)
+				if err != nil {
+					return
+				}
+				r.Password = "******"
+				marshal, err := json.Marshal(&r)
+				sysLog.Params = string(marshal)
+			}
+
 			sysLog.Resp = writer.body.String()
 			sysLog.StatusCode = strconv.Itoa(c.Writer.Status())
 			sysLog.CostTimeMs = costTime
