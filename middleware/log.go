@@ -23,6 +23,11 @@ func (w *responseWriter) Write(b []byte) (int, error) {
 func LogMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
+
+		userId, userIdExist := c.Get("userId")
+		deptId, deptIdExists := c.Get("deptId")
+		username, userNameExists := c.Get("userName")
+
 		// 记录请求体（需重置读取位置）
 		reqBody, _ := c.GetRawData()
 		c.Request.Body = io.NopCloser(bytes.NewReader(reqBody)) // 放回请求体
@@ -47,6 +52,19 @@ func LogMiddleware() gin.HandlerFunc {
 			sysLog.Resp = writer.body.String()
 			sysLog.StatusCode = strconv.Itoa(c.Writer.Status())
 			sysLog.CostTimeMs = costTime
+			if userIdExist {
+				sysLog.CreateBy = userId.(string)
+			}
+
+			if deptIdExists {
+				id, _ := strconv.Atoi(deptId.(string))
+				sysLog.DeptId = id
+			}
+
+			if userNameExists {
+				sysLog.CreateUser = username.(string)
+			}
+
 			models.DB.Create(&sysLog)
 		}()
 	}

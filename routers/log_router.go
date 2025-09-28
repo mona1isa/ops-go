@@ -12,6 +12,6 @@ func (l *LogRouter) SetUp(r *gin.RouterGroup) {
 	log := system.SystemLogController{}
 	logGroup := r.Group("/log")
 	{
-		logGroup.GET("/page", log.List)
+		logGroup.POST("/page", log.List)
 	}
 }

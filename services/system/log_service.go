@@ -24,6 +24,21 @@ func (s *LogService) Page(request *api.LogRequest) (models.PageResult[models.Sys
 	if uri != "" {
 		scopes = append(scopes, RequestUrlScope(uri))
 	}
+
+	createUser := request.CreateUser
+	if createUser != "" {
+		scopes = append(scopes, CreateUserScope(createUser))
+	}
+
+	statusCode := request.StatusCode
+	if statusCode != "" {
+		scopes = append(scopes, StatusCodeScope(statusCode))
+	}
+	// 按 id 降序排列
+	scopes = append(scopes, func(db *gorm.DB) *gorm.DB {
+		return db.Order("id desc")
+	})
+
 	pageResult, err := models.Paginate[models.SysLog](models.DB, pageNum, pageSize, scopes...)
 	if err != nil {
 		panic(err)
@@ -40,5 +55,17 @@ func MethodScope(method string) func(db *gorm.DB) *gorm.DB {
 func RequestUrlScope(requestUrl string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("request_uri like ?", "%"+requestUrl+"%")
+	}
+}
+
+func CreateUserScope(createUser string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("create_user = ?", createUser)
+	}
+}
+
+func StatusCodeScope(statusCode string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("status_code = ?", statusCode)
 	}
 }

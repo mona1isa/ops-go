@@ -13,24 +13,27 @@ var (
 )
 
 type CasbinHandler struct {
-	enforcer *casbin.Enforcer
+	enforcer *casbin.SyncedEnforcer
 }
 
 func (c *CasbinHandler) init() {
-	adapter, err := gormadapter.NewAdapterByDB(DB)
-	if err != nil {
-		panic(err)
-	}
-	c.enforcer, err = casbin.NewEnforcer("config/casbin_rbac.conf", adapter)
-	if err != nil {
-		panic(err)
-	}
-	err = c.enforcer.LoadPolicy()
+	once.Do(func() {
+		adapter, err := gormadapter.NewAdapterByDB(DB)
+		if err != nil {
+			panic(err)
+		}
+		c.enforcer, err = casbin.NewSyncedEnforcer("config/casbin_rbac.conf", adapter)
+		if err != nil {
+			panic(err)
+		}
+	})
+
+	c.enforcer.EnableAutoSave(true)
+	c.enforcer.EnableLog(true)
+	err := c.enforcer.LoadPolicy()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to load policy: %v", err))
 	}
-	c.enforcer.EnableAutoSave(true)
-	c.enforcer.EnableLog(true)
 }
 
 // Enforcer Casbin权限验证
