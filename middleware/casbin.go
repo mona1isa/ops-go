@@ -49,6 +49,7 @@ func CasbinMiddleware() gin.HandlerFunc {
 				"code": http.StatusForbidden,
 				"msg":  "无权限访问",
 			})
+			return
 		}
 		ctx.Next()
 	}

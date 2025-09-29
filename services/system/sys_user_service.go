@@ -115,6 +115,8 @@ func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
 		}
 	}
 
+	perms := GetUserPerms(userId)
+
 	userInfo := &api.UserInfo{
 		Id:        user.ID,
 		DeptId:    user.DeptId,
@@ -127,6 +129,7 @@ func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
 		Status:    user.Status,
 		RoleIds:   roleIds,
 		RoleNames: roleNames,
+		Perms:     perms,
 	}
 
 	return userInfo, nil
@@ -304,4 +307,17 @@ func UserNameScope(userName string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Where("user_name like ?", "%"+userName+"%")
 	}
+}
+
+// GetUserPerms 获取用户权限
+func GetUserPerms(userId string) []string {
+	var perms []string
+	if err := models.DB.Model(&models.SysUserRole{}).Joins(""+
+		"JOIN sys_role_menu ON sys_user_role.role_id = sys_role_menu.role_id"+
+		"").Joins("JOIN sys_menu on sys_menu.id=sys_role_menu.menu_id").Where(""+
+		"sys_menu.type='F' AND sys_user_role.user_id = ?", userId).Select("sys_menu.perms").Scan(&perms).Error; err != nil {
+		log.Println("查询用户权限失败：", err)
+		return perms
+	}
+	return perms
 }

@@ -29,6 +29,7 @@ var secret = os.Getenv("JWT_SECRET")
 var ExcludePaths = [...]string{
 	"/api/captcha/generate",
 	"/api/user/login",
+	"/api/user/logout",
 }
 
 func AuthMiddleware() gin.HandlerFunc {

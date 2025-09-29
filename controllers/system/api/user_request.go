@@ -59,15 +59,16 @@ type UserStatusRequest struct {
 }
 
 type UserInfo struct {
-	Id        int    `json:"id"`
-	DeptId    int    `json:"deptId"`
-	UserName  string `json:"username"`
-	Nickname  string `json:"nickname"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	Sex       int    `json:"sex"`
-	Avatar    string `json:"avatar"`
-	Status    string `json:"status"`
-	RoleIds   []int  `json:"roleIds"`
-	RoleNames string `json:"roleNames"`
+	Id        int      `json:"id"`
+	DeptId    int      `json:"deptId"`
+	UserName  string   `json:"username"`
+	Nickname  string   `json:"nickname"`
+	Email     string   `json:"email"`
+	Phone     string   `json:"phone"`
+	Sex       int      `json:"sex"`
+	Avatar    string   `json:"avatar"`
+	Status    string   `json:"status"`
+	RoleIds   []int    `json:"roleIds"`
+	RoleNames string   `json:"roleNames"`
+	Perms     []string `json:"perms"`
 }
