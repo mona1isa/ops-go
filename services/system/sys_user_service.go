@@ -81,8 +81,9 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	}
 
 	// 更新用户登录信息
+	now = time.Now()
 	user.LoginIP = request.LoginIP
-	user.LoginDate = request.LoginDate
+	user.LoginDate = &now
 	user.UpdateLoginInfo()
 	return jwt, nil
 }
@@ -114,9 +115,10 @@ func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
 			roleNames += v.RoleName + ","
 		}
 	}
+	roleNames = strings.TrimSuffix(roleNames, ",")
 
 	perms := GetUserPerms(userId)
-
+	loginDate := user.LoginDate.Format("2006-01-02 15:04:05")
 	userInfo := &api.UserInfo{
 		Id:        user.ID,
 		DeptId:    user.DeptId,
@@ -127,6 +129,8 @@ func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
 		Sex:       user.Sex,
 		Avatar:    user.Avatar,
 		Status:    user.Status,
+		IpAddr:    user.LoginIP,
+		LoginDate: loginDate,
 		RoleIds:   roleIds,
 		RoleNames: roleNames,
 		Perms:     perms,

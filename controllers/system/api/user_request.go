@@ -68,6 +68,8 @@ type UserInfo struct {
 	Sex       int      `json:"sex"`
 	Avatar    string   `json:"avatar"`
 	Status    string   `json:"status"`
+	IpAddr    string   `json:"ipAddr"`
+	LoginDate string   `json:"loginDate"`
 	RoleIds   []int    `json:"roleIds"`
 	RoleNames string   `json:"roleNames"`
 	Perms     []string `json:"perms"`
