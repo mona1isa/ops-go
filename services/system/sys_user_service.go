@@ -158,6 +158,8 @@ func (u *UserService) AddUser(request api.UserRequest) error {
 		Status:   request.Status,
 		RoleIds:  request.RoleIds,
 	}
+	user.CreateBy = request.CreateBy
+	user.UpdateBy = request.UpdateBy
 	// 加密存储密码
 	user.Password = hashedPassword
 	if err := models.DB.Create(&user).Error; err != nil {

@@ -62,6 +62,9 @@ func (s *SysUserController) AddUserHandler(ctx *gin.Context) {
 		return
 	}
 
+	userId := s.GetUserId(ctx)
+	userRequest.CreateBy = userId
+	userRequest.UpdateBy = userId
 	userService := system.UserService{}
 	if err := userService.AddUser(userRequest); err != nil {
 		s.Failure(ctx, http.StatusInternalServerError, err.Error())

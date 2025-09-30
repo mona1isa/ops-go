@@ -19,6 +19,8 @@ type UserRequest struct {
 	Status    string    `json:"status"`
 	LoginIP   string    `json:"loginIp"`
 	LoginDate time.Time `json:"loginDate"`
+	CreateBy  string    `json:"createBy"`
+	UpdateBy  string    `json:"updateBy"`
 }
 
 type PageUserRequest struct {
@@ -43,8 +45,8 @@ type EditUserRequest struct {
 	RoleIds   []int     `json:"roleIds"`
 	UserName  string    `json:"userName"`
 	Nickname  string    `json:"nickname"`
-	Email     string    `json:"email" binding:"email"`
-	Phone     string    `json:"phone" binding:"required"`
+	Email     string    `json:"email"`
+	Phone     string    `json:"phone"`
 	Sex       int       `json:"sex"`
 	Avatar    string    `json:"avatar"`
 	Password  string    `json:"password"`
