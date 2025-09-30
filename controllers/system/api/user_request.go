@@ -53,11 +53,20 @@ type EditUserRequest struct {
 	Status    string    `json:"status"`
 	LoginIP   string    `json:"loginIp"`
 	LoginDate time.Time `json:"loginDate"`
+	UpdateBy  string    `json:"updateBy"`
 }
 
 type UserStatusRequest struct {
 	Id     int    `json:"id" binding:"required"`
 	Status string `json:"status" binding:"required"`
+}
+
+type UpdatePasswordRequest struct {
+	Id              int    `json:"id" binding:"required"`
+	OldPassword     string `json:"oldPassword"`
+	NewPassword     string `json:"newPassword"`
+	ConfirmPassword string `json:"confirmPassword"`
+	UpdateBy        string `json:"updateBy"`
 }
 
 type UserInfo struct {

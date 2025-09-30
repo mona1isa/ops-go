@@ -16,6 +16,7 @@ func (*UserRouter) Setup(r *gin.RouterGroup) {
 		userGroup.GET("/info", uc.UserInfoHandler)
 		userGroup.POST("/add", uc.AddUserHandler)
 		userGroup.POST("/updatePersonalInfo", uc.UpdatePersonalInfo)
+		userGroup.POST("/updatePassword", uc.UpdatePassword)
 		userGroup.POST("/edit", uc.EditUserHandler)
 		userGroup.POST("/page", uc.Page)
 		userGroup.DELETE("/rm/:id", uc.Delete)

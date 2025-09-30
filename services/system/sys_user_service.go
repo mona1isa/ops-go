@@ -1,12 +1,14 @@
 package system
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services"
+	"github.com/zhany/ops-go/utils"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"log"
@@ -179,13 +181,96 @@ func (u *UserService) UpdatePersonalInfo(request api.EditUserRequest) error {
 		return errors.New("用户不存在")
 	}
 
-	if err := models.DB.Model(&models.SysUser{}).Where("id = ?", id).UpdateColumns(&models.SysUser{
+	updateUser := models.SysUser{
 		NickName: request.Nickname,
 		Email:    request.Email,
-		Sex:      request.Sex}).Error; err != nil {
+		Phone:    request.Phone,
+		Sex:      request.Sex,
+	}
+	updateUser.UpdateBy = request.UpdateBy
+	if err := models.DB.Model(&models.SysUser{}).Where("id = ?", id).UpdateColumns(&updateUser).Error; err != nil {
 		log.Println("更新用户失败：", err)
 		errInfo := fmt.Sprintf("更新用户失败：%s", err)
 		return errors.New(errInfo)
+	}
+	return nil
+}
+
+func (s *UserService) UpdatePassword(request api.UpdatePasswordRequest) error {
+	id := request.Id
+	var user models.SysUser
+	if err := models.DB.Where("id = ?", id).First(&user).Error; err != nil {
+		log.Println("用户不存在，ID: ", id)
+		return errors.New("用户不存在")
+	}
+
+	privateKey, err := utils.ParsePrivateKeyFromPEM(utils.PrivateKey)
+	if err != nil {
+		log.Println("解析私钥失败：", err)
+		return errors.New("解析私钥失败")
+	}
+
+	base64OldPassword := request.OldPassword
+	encrptOldPwd, err2 := base64.StdEncoding.DecodeString(base64OldPassword)
+	if err2 != nil {
+		log.Println("密码解密失败：", err2)
+		return errors.New("解码密码失败")
+	}
+
+	oldPassword, err := utils.Decrypt(privateKey, encrptOldPwd)
+	if err != nil {
+		log.Println("密码解密失败：", err)
+		return errors.New("密码解密失败")
+	}
+
+	if err := s.CheckHashPassword(string(oldPassword), user.Password); err != nil {
+		log.Println("密码错误：", err)
+		return errors.New("密码错误")
+	}
+
+	// 新密码
+	base64NewPassword := request.NewPassword
+	encrptNewPwd, err2 := base64.StdEncoding.DecodeString(base64NewPassword)
+	if err2 != nil {
+		log.Println("新密码解码失败：", err2)
+		return errors.New("新密码解码失败")
+	}
+	newPassword, err := utils.Decrypt(privateKey, encrptNewPwd)
+	if err != nil {
+		log.Println("新密码解密失败：", err)
+		return errors.New("新密码解密失败")
+	}
+
+	// 确认密码
+	base64ConfirmPassword := request.ConfirmPassword
+	encrptConfirmPwd, err2 := base64.StdEncoding.DecodeString(base64ConfirmPassword)
+	if err2 != nil {
+		log.Println("确认密码解码失败：", err2)
+		return errors.New("确认密码解码失败")
+	}
+
+	confirmPassword, err := utils.Decrypt(privateKey, encrptConfirmPwd)
+	if err != nil {
+		log.Println("确认密码解密失败：", err)
+		return errors.New("确认密码解密失败")
+	}
+
+	if string(newPassword) != string(confirmPassword) {
+		log.Printf("两次密码不一致 %s, %s\n", newPassword, confirmPassword)
+		return errors.New("两次密码不一致")
+	}
+
+	hashedPassword, err := s.HashPassword(string(newPassword))
+	if err != nil {
+		log.Println("密码加密失败：", err)
+		return err
+	}
+	updateUser := models.SysUser{
+		Password: hashedPassword,
+	}
+	updateUser.UpdateBy = request.UpdateBy
+	if err := models.DB.Model(&models.SysUser{}).Where("id = ?", id).UpdateColumns(&updateUser).Error; err != nil {
+		log.Println("更新用户失败：", err)
 	}
 	return nil
 }
@@ -207,6 +292,7 @@ func (u *UserService) EditUser(request api.EditUserRequest) error {
 	user.Avatar = request.Avatar
 	user.Status = request.Status
 	user.RoleIds = request.RoleIds
+	user.UpdateBy = request.UpdateBy
 	result := models.DB.Save(&user)
 	if result.RowsAffected == 0 {
 		log.Println("更新用户失败：", result.Error)

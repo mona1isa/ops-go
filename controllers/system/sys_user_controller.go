@@ -93,8 +93,25 @@ func (s *SysUserController) UpdatePersonalInfo(ctx *gin.Context) {
 		return
 	}
 
+	userRequest.UpdateBy = s.GetUserId(ctx)
 	service := system.UserService{}
 	if err := service.UpdatePersonalInfo(userRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
+}
+
+// UpdatePassword 更新用户密码
+func (s *SysUserController) UpdatePassword(ctx *gin.Context) {
+	userRequest := api.UpdatePasswordRequest{}
+	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	service := system.UserService{}
+	if err := service.UpdatePassword(userRequest); err != nil {
 		s.Failure(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -113,6 +130,7 @@ func (s *SysUserController) EditUserHandler(ctx *gin.Context) {
 		return
 	}
 
+	userRequest.UpdateBy = s.GetUserId(ctx)
 	service := system.UserService{}
 	if err := service.EditUser(userRequest); err != nil {
 		s.Failure(ctx, http.StatusBadRequest, err.Error())
