@@ -85,6 +85,22 @@ func (s *SysUserController) UserInfoHandler(ctx *gin.Context) {
 	s.Success(ctx, userInfo)
 }
 
+// UpdatePersonalInfo 更新个人信息
+func (s *SysUserController) UpdatePersonalInfo(ctx *gin.Context) {
+	userRequest := api.EditUserRequest{}
+	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	service := system.UserService{}
+	if err := service.UpdatePersonalInfo(userRequest); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
+}
+
 // EditUserHandler 编辑用户
 func (s *SysUserController) EditUserHandler(ctx *gin.Context) {
 	userRequest := api.EditUserRequest{}

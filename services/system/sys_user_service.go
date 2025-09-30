@@ -171,6 +171,25 @@ func (u *UserService) AddUser(request api.UserRequest) error {
 	return nil
 }
 
+func (u *UserService) UpdatePersonalInfo(request api.EditUserRequest) error {
+	id := request.Id
+	var user models.SysUser
+	if err := models.DB.Where("id = ?", id).First(&user).Error; err != nil {
+		log.Println("用户不存在，ID: ", id)
+		return errors.New("用户不存在")
+	}
+
+	if err := models.DB.Model(&models.SysUser{}).Where("id = ?", id).UpdateColumns(&models.SysUser{
+		NickName: request.Nickname,
+		Email:    request.Email,
+		Sex:      request.Sex}).Error; err != nil {
+		log.Println("更新用户失败：", err)
+		errInfo := fmt.Sprintf("更新用户失败：%s", err)
+		return errors.New(errInfo)
+	}
+	return nil
+}
+
 // EditUser 编辑用户
 func (u *UserService) EditUser(request api.EditUserRequest) error {
 	id := request.Id

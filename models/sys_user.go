@@ -101,5 +101,11 @@ func (u *SysUser) deleteUserRole() error {
 
 // UpdateLoginInfo 只更新部分信息不需要执行 hook 函数时使用
 func (u *SysUser) UpdateLoginInfo() {
-	DB.Model(u).UpdateColumn("login_ip,login_date", map[string]any{"login_ip": u.LoginIP, "login_date": u.LoginDate})
+	user := SysUser{
+		LoginIP:   u.LoginIP,
+		LoginDate: u.LoginDate,
+	}
+	if err := DB.Model(&SysUser{}).Where("id = ?", u.ID).UpdateColumns(&user).Error; err != nil {
+		log.Println("更新用户登录信息失败：", err)
+	}
 }
