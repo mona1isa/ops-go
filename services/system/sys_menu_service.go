@@ -67,7 +67,7 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 
 	if isAdmin {
 		tx := models.DB.Model(models.SysMenu{}).
-			Where("type <> ? AND status = ? AND del_flag = ?", "F", "1", "0")
+			Where("type <> ? AND status = ? AND del_flag = ? order by order_num asc", "F", "1", "0")
 		if err := tx.Find(&menuList).Error; err != nil {
 			log.Println("查询菜单列表失败", err)
 			return nil, errors.New("查询菜单列表失败")
@@ -96,7 +96,7 @@ func (*MenuService) RoutesList(userId string, isAdmin bool) ([]*api.MenuTree, er
 
 		// 查询菜单
 		tx := models.DB.Model(models.SysMenu{}).
-			Where("type <> ? AND status = ? AND del_flag = ? AND id IN ?", "F", "1", "0", menuIds)
+			Where("type <> ? AND status = ? AND del_flag = ? AND id IN ? order by order_num asc", "F", "1", "0", menuIds)
 		if err := tx.Find(&menuList).Error; err != nil {
 			log.Println("查询菜单列表失败", err)
 			return nil, errors.New("查询菜单列表失败")
@@ -125,6 +125,7 @@ func (*MenuService) List(request *api.MenuListRequest) ([]*api.MenuTree, error) 
 		query = query.Scopes(scopes...)
 	}
 
+	query = query.Order("order_num asc")
 	if err := query.Find(&menuList).Error; err != nil {
 		log.Println("查询菜单列表失败", err)
 		return nil, errors.New("查询菜单列表失败")
