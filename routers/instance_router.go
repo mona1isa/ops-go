@@ -1,0 +1,22 @@
+package routers
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/zhany/ops-go/controllers/instance"
+)
+
+type InstanceRouter struct {
+}
+
+func (*InstanceRouter) Setup(r *gin.RouterGroup) {
+	instanceController := instance.InstanceController{}
+	instanceGroup := r.Group("/instance")
+	{
+		instanceGroup.POST("/add", instanceController.AddInstanceHandler)
+		instanceGroup.POST("/edit", instanceController.EditInstanceHandler)
+		instanceGroup.POST("/changeStatus", instanceController.ChangeStatus)
+		instanceGroup.POST("/page", instanceController.PageInstanceHandler)
+		instanceGroup.GET("/info/:id", instanceController.GetInstanceDetailHandler)
+		instanceGroup.DELETE("/rm/:id", instanceController.DeleteInstanceHandler)
+	}
+}

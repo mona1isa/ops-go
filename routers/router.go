@@ -19,6 +19,7 @@ func Init() *gin.Engine {
 	roleRouter := RoleRouter{}
 	menuRouter := MenuRouter{}
 	deptRouter := DeptRouter{}
+	instanceRouter := InstanceRouter{}
 
 	userRouter.Setup(api)
 	captchaRouter.Setup(api)
@@ -26,5 +27,6 @@ func Init() *gin.Engine {
 	roleRouter.Setup(api)
 	menuRouter.Setup(api)
 	deptRouter.Setup(api)
+	instanceRouter.Setup(api)
 	return r
 }
