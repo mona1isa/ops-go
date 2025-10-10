@@ -22,10 +22,8 @@ func (c *InstanceController) AddInstanceHandler(ctx *gin.Context) {
 	}
 
 	userId := c.GetUserId(ctx)
-	deptId, _ := strconv.Atoi(c.GetDeptId(ctx))
 	instanceRequest.CreateBy = userId
 	instanceRequest.UpdateBy = userId
-	instanceRequest.DeptId = deptId
 
 	service := instance.InstanceService{}
 	err := service.AddInstance(instanceRequest)

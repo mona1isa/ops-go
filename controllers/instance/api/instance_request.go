@@ -3,11 +3,10 @@ package api
 import "github.com/zhany/ops-go/controllers"
 
 type AddInstanceRequest struct {
-	DeptId   int    `json:"deptId"`
 	Name     string `json:"name"`
 	Cpu      int    `json:"cpu"`
-	Mem      int    `json:"mem"`
-	Disk     int    `json:"disk"`
+	MemMb    int    `json:"memMb"`
+	DiskGb   int    `json:"diskGb"`
 	Ip       string `json:"ip"`
 	Port     int    `json:"port"`
 	Os       string `json:"os"`

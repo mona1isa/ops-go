@@ -12,10 +12,9 @@ type InstanceService struct{}
 
 // AddInstance 添加实例
 func (s *InstanceService) AddInstance(request api.AddInstanceRequest) (err error) {
-	deptId := request.DeptId
 	name := request.Name
 	var count int64
-	if err := models.DB.Model(&models.OpsInstance{}).Where("dept_id = ? and name = ?", deptId, name).Count(&count).Error; err != nil {
+	if err := models.DB.Model(&models.OpsInstance{}).Where("name = ?", name).Count(&count).Error; err != nil {
 		return errors.New("添加主机失败")
 	}
 	if count > 0 {
@@ -23,11 +22,10 @@ func (s *InstanceService) AddInstance(request api.AddInstanceRequest) (err error
 	}
 
 	instance := models.OpsInstance{
-		DeptId: deptId,
 		Name:   name,
 		Cpu:    request.Cpu,
-		Mem:    request.Mem,
-		Disk:   request.Disk,
+		MemMb:  request.MemMb,
+		DiskGb: request.DiskGb,
 		Ip:     request.Ip,
 		Port:   request.Port,
 		Os:     request.Os,
@@ -36,7 +34,9 @@ func (s *InstanceService) AddInstance(request api.AddInstanceRequest) (err error
 
 	instance.CreateBy = request.CreateBy
 	instance.UpdateBy = request.UpdateBy
+	instance.Remark = request.Remark
 	if err = models.DB.Save(&instance).Error; err != nil {
+		log.Println("添加主机失败：", err)
 		return errors.New("添加主机失败")
 	}
 	return
@@ -45,10 +45,9 @@ func (s *InstanceService) AddInstance(request api.AddInstanceRequest) (err error
 // EditInstance 编辑实例
 func (s *InstanceService) EditInstance(request api.UpdateInstanceRequest) (err error) {
 	id := request.Id
-	deptId := request.DeptId
 	name := request.Name
 	var count int64
-	if err := models.DB.Model(&models.OpsInstance{}).Where("dept_id = ? and name = ? and id != ?", deptId, name, id).Count(&count).Error; err != nil {
+	if err := models.DB.Model(&models.OpsInstance{}).Where("name = ? and id != ?", name, id).Count(&count).Error; err != nil {
 		return errors.New("添加主机失败")
 	}
 	if count > 0 {
@@ -57,11 +56,11 @@ func (s *InstanceService) EditInstance(request api.UpdateInstanceRequest) (err e
 
 	var instance models.OpsInstance
 	models.DB.First(&instance, id)
-	instance.DeptId = deptId
+
 	instance.Name = name
 	instance.Cpu = request.Cpu
-	instance.Mem = request.Mem
-	instance.Disk = request.Disk
+	instance.MemMb = request.MemMb
+	instance.DiskGb = request.DiskGb
 	instance.Ip = request.Ip
 	instance.Port = request.Port
 	instance.Os = request.Os
@@ -98,11 +97,6 @@ func (s *InstanceService) PageInstance(request api.PageInstanceRequest) (models.
 	if request.Status != "" {
 		scopes = append(scopes, func(db *gorm.DB) *gorm.DB {
 			return db.Where("status = ?", request.Status)
-		})
-	}
-	if request.DeptId != 0 {
-		scopes = append(scopes, func(db *gorm.DB) *gorm.DB {
-			return db.Where("dept_id = ?", request.DeptId)
 		})
 	}
 
