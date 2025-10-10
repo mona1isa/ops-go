@@ -13,6 +13,17 @@ type KeysController struct {
 	controllers.BaseController
 }
 
+// ListHandler 获取key列表
+func (k *KeysController) ListHandler(ctx *gin.Context) {
+	service := instance.KeysService{}
+	info, err := service.ListKeys()
+	if err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.Success(ctx, info)
+}
+
 // AddKeyHandler 添加key
 func (k *KeysController) AddKeyHandler(ctx *gin.Context) {
 	request := api.AddKeysRequest{}

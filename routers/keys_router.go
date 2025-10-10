@@ -11,6 +11,7 @@ func (*KeysRouter) Setup(r *gin.RouterGroup) {
 	keysController := instance.KeysController{}
 	keysGroup := r.Group("/keys")
 	{
+		keysGroup.GET("/list", keysController.ListHandler)
 		keysGroup.POST("/add", keysController.AddKeyHandler)
 		keysGroup.POST("/edit", keysController.EditKeyHandler)
 		keysGroup.POST("/page", keysController.PageKeyHandler)

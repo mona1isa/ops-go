@@ -22,5 +22,9 @@ type UpdateKeysRequest struct {
 
 type PageKeysRequest struct {
 	controllers.PageRequest
-	AddKeysRequest
+	Name     string `json:"name"`
+	User     string `json:"user"`
+	Status   string `json:"status"`
+	Protocol string `json:"protocol"`
+	Type     int    `json:"type"`
 }

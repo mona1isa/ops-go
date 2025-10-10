@@ -11,6 +11,15 @@ import (
 type KeysService struct {
 }
 
+// ListKeys 获取密钥列表
+func (s *KeysService) ListKeys() (keys []models.OpsKey, err error) {
+	if err := models.DB.Where("status = ? AND del_flag = ?", "1", "0").Find(&keys).Error; err != nil {
+		log.Println("查询密钥失败：", err)
+		return nil, errors.New("查询密钥失败")
+	}
+	return keys, nil
+}
+
 // AddKey 添加密钥
 func (s *KeysService) AddKey(request api.AddKeysRequest) (err error) {
 	name := request.Name
