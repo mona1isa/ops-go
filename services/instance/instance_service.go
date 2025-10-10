@@ -66,6 +66,7 @@ func (s *InstanceService) EditInstance(request api.UpdateInstanceRequest) (err e
 	instance.Os = request.Os
 	instance.Status = request.Status
 	instance.UpdateBy = request.UpdateBy
+	instance.Remark = request.Remark
 	if err := models.DB.Save(&instance).Error; err != nil {
 		return errors.New("编辑主机失败")
 	}
