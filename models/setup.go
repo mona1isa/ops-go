@@ -33,6 +33,8 @@ func InitDB() {
 		&SysUserToken{},
 		&SysDept{},
 		&OpsInstance{},
+		&OpsKey{},
+		&OpsInstanceKey{},
 	}
 
 	for _, table := range tables {

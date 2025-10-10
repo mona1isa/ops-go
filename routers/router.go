@@ -20,6 +20,7 @@ func Init() *gin.Engine {
 	menuRouter := MenuRouter{}
 	deptRouter := DeptRouter{}
 	instanceRouter := InstanceRouter{}
+	keysRouter := KeysRouter{}
 
 	userRouter.Setup(api)
 	captchaRouter.Setup(api)
@@ -28,5 +29,6 @@ func Init() *gin.Engine {
 	menuRouter.Setup(api)
 	deptRouter.Setup(api)
 	instanceRouter.Setup(api)
+	keysRouter.Setup(api)
 	return r
 }

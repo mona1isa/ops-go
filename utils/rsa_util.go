@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"log"
 )
 
 var PrivateKey = `
@@ -203,4 +205,24 @@ func ParsePublicKeyFromPEM(pemData string) (*rsa.PublicKey, error) {
 	}
 	// Return the successfully parsed RSA public key
 	return publicKey, nil
+}
+
+// DecryptKey 解密登录凭证
+func DecryptKey(encryptedKey string) (key string, err error) {
+	privateKey, err := ParsePrivateKeyFromPEM(PrivateKey)
+	if err != nil {
+		log.Println("解析私钥失败：", err)
+		return "", errors.New("解析私钥失败")
+	}
+	encrptPwd, err := base64.StdEncoding.DecodeString(encryptedKey)
+	if err != nil {
+		log.Println("登录凭证解码失败：", err)
+		return "", errors.New("登录凭证解码失败")
+	}
+	credentials, err := Decrypt(privateKey, encrptPwd)
+	if err != nil {
+		log.Println("登录凭证解密失败：", err)
+		return "", errors.New("登录凭证解密失败")
+	}
+	return string(credentials), nil
 }
