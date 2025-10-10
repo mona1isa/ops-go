@@ -59,7 +59,7 @@ func (k *KeysController) EditKeyHandler(ctx *gin.Context) {
 // PageKeyHandler 分页查询key
 func (k *KeysController) PageKeyHandler(ctx *gin.Context) {
 	request := api.PageKeysRequest{}
-	if err := ctx.ShouldBindQuery(&request); err != nil {
+	if err := ctx.ShouldBindJSON(&request); err != nil {
 		k.Failure(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
