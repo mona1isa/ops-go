@@ -100,3 +100,17 @@ func (k *KeysController) DeleteKeyHandler(ctx *gin.Context) {
 	}
 	k.JustSuccess(ctx)
 }
+
+// AvailableKeysHandler 获取可用于绑定该主机的key
+func (k *KeysController) AvailableKeysHandler(ctx *gin.Context) {
+	instanceId := ctx.Param("instanceId")
+	instanceIdInt, _ := strconv.Atoi(instanceId)
+
+	service := instance.KeysService{}
+	info, err := service.AvailableKeys(instanceIdInt)
+	if err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.Success(ctx, info)
+}

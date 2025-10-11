@@ -16,7 +16,8 @@ type OpsInstance struct {
 	Os         string `gorm:"type:varchar(32);not null;comment:操作系统" json:"os"`
 	Status     string `gorm:"type:varchar(1);default:1;comment:状态（1 正常 0 禁用）" json:"status"`
 	Base
-	Spec string `gorm:"-" json:"spec"` //规格
+	Spec        string           `gorm:"-" json:"spec"`        //规格
+	BindingKeys []OpsInstanceKey `gorm:"-" json:"bindingKeys"` //已绑定key 列表
 }
 
 const TableOpsInstance = "ops_instance"

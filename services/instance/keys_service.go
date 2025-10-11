@@ -6,6 +6,7 @@ import (
 	"github.com/zhany/ops-go/models"
 	"gorm.io/gorm"
 	"log"
+	"strings"
 )
 
 type KeysService struct {
@@ -134,4 +135,46 @@ func (s *KeysService) DeleteKey(id int) (err error) {
 		return errors.New("删除主机失败")
 	}
 	return nil
+}
+
+// AvailableKeys 获取实例可用凭证
+func (s *KeysService) AvailableKeys(instanceId int) (keys []models.OpsKey, err error) {
+	// 获取实例信息
+	var instance models.OpsInstance
+	if err := models.DB.First(&instance, instanceId).Error; err != nil {
+		return nil, errors.New("获取实例信息失败")
+	}
+
+	protocol := "ssh"
+	if strings.EqualFold(instance.Os, "windows") {
+		protocol = "rdp"
+	}
+	// 获取所有凭证
+	var allKeys []models.OpsKey
+	if err := models.DB.Where("protocol = ? AND status = ? AND del_flag = ?", protocol, "1", "0").Find(&allKeys).Error; err != nil {
+		log.Println("查询密钥失败：", err)
+		return nil, errors.New("查询密钥失败")
+	}
+
+	// 获取实例已绑定的凭证
+	var instanceKeys []models.OpsInstanceKey
+	if err := models.DB.Where("instance_id = ?", instanceId).Find(&instanceKeys).Error; err != nil {
+		log.Println("查询实例密钥失败：", err)
+		return nil, errors.New("查询实例密钥失败")
+	}
+
+	// 从所有凭证中过滤出未绑定的凭证
+	for _, key := range allKeys {
+		isBind := false
+		for _, instanceKey := range instanceKeys {
+			if key.ID == instanceKey.KeyId {
+				isBind = true
+				break
+			}
+		}
+		if !isBind {
+			keys = append(keys, key)
+		}
+	}
+	return keys, nil
 }

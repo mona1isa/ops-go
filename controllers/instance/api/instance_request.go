@@ -30,3 +30,8 @@ type PageInstanceRequest struct {
 	controllers.PageRequest
 	AddInstanceRequest
 }
+
+type InstanceKeyBindingRequest struct {
+	InstanceId int `json:"instanceId" required:"true"`
+	KeyId      int `json:"keyId" required:"true"`
+}
