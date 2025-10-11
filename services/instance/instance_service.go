@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/zhany/ops-go/controllers/instance/api"
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/utils"
 	"gorm.io/gorm"
 	"log"
 )
@@ -106,14 +107,15 @@ func (s *InstanceService) PageInstance(request api.PageInstanceRequest) (models.
 	}
 
 	// 查询主机绑定的密钥
-	for _, instance := range pageResult.Data {
+	for i := range pageResult.Data {
+		instance := &pageResult.Data[i]
 		id := instance.ID
 		// select * from ops_key where id in(select key_id from ops_instance_keys where instance_id =?)
-		var instanceKeys []models.OpsInstanceKey
-		if err := models.DB.Table("ops_key").Select("id, name").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&instanceKeys).Error; err != nil {
+		var opsKeys []models.OpsKey
+		if err := models.DB.Table("ops_key").Select("id, name, type").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&opsKeys).Error; err != nil {
 			return pageResult, errors.New("查询主机列表失败")
 		}
-		instance.BindingKeys = instanceKeys
+		instance.BindingKeys = opsKeys
 	}
 
 	return pageResult, nil
@@ -126,12 +128,12 @@ func (s *InstanceService) GetInstanceDetail(id int) (instance models.OpsInstance
 		return instance, errors.New("主机不存在")
 	}
 	// 查询实例-凭证关系
-	var instanceKeys []models.OpsInstanceKey
+	var opsKeys []models.OpsKey
 	// select id, name from ops_key where id in (select key_id from ops_instance_key where instance_id = ?)
-	if err := models.DB.Table("ops_key").Select("id, name").Joins("join ops_instance_key on ops_key.id = ops_instance_key.key_id").Where("ops_instance_key.instance_id = ?", id).Find(&instanceKeys).Error; err != nil {
+	if err := models.DB.Table("ops_key").Select("id, name").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&opsKeys).Error; err != nil {
 		return instance, errors.New("查询主机详情失败")
 	}
-	instance.BindingKeys = instanceKeys
+	instance.BindingKeys = opsKeys
 	return
 }
 
@@ -168,5 +170,38 @@ func (s *InstanceService) KeyBinding(request api.InstanceKeyBindingRequest) (err
 		return errors.New("绑定密钥失败")
 	}
 
+	return nil
+}
+
+func (s *InstanceService) TestConnect(request api.InstanceKeyBindingRequest) (err error) {
+	instanceId := request.InstanceId
+	keyId := request.KeyId
+
+	// 检查实例是否存在
+	var instance models.OpsInstance
+	if err := models.DB.First(&instance, instanceId).Error; err != nil {
+		log.Println("绑定密钥失败：", err)
+		return errors.New("实例不存在, 主机无法连接")
+	}
+
+	// 检查密钥是否存在
+	var key models.OpsKey
+	if err := models.DB.First(&key, keyId).Error; err != nil {
+		log.Println("绑定密钥失败：", err)
+		return errors.New("密钥不存在, 主机无法连接")
+	}
+
+	ip := instance.Ip
+	info := utils.HostInfo{
+		Ip:          ip,
+		Port:        key.Port,
+		User:        key.User,
+		Credentials: key.Credentials,
+		Type:        key.Type,
+	}
+	err = utils.TestConnect(&info)
+	if err != nil {
+		return err
+	}
 	return nil
 }

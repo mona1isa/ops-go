@@ -127,3 +127,18 @@ func (c *InstanceController) KeyBindingHandler(ctx *gin.Context) {
 	}
 	c.JustSuccess(ctx)
 }
+
+func (c *InstanceController) TestConnectHandler(ctx *gin.Context) {
+	request := api.InstanceKeyBindingRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := instance.InstanceService{}
+	err := service.TestConnect(request)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JustSuccess(ctx)
+}
