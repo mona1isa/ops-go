@@ -117,6 +117,17 @@ func (s *KeysService) PageKey(request api.PageKeysRequest) (models.PageResult[mo
 	return pageResult, nil
 }
 
+// ChangeStatus 修改密钥状态
+func (s *KeysService) ChangeStatus(request api.ChangeStatusRequest) (err error) {
+	id := request.Id
+	status := request.Status
+	if err := models.DB.Model(&models.OpsKey{}).Where("id = ?", id).Update("status", status).Error; err != nil {
+		log.Println("更新密钥状态失败：", err)
+		return errors.New("更新密钥状态失败")
+	}
+	return nil
+}
+
 // DeleteKey 删除密钥
 func (s *KeysService) DeleteKey(id int) (err error) {
 	if err := models.DB.Delete(&models.OpsKey{}, id).Error; err != nil {

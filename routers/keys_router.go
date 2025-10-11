@@ -15,6 +15,7 @@ func (*KeysRouter) Setup(r *gin.RouterGroup) {
 		keysGroup.POST("/add", keysController.AddKeyHandler)
 		keysGroup.POST("/edit", keysController.EditKeyHandler)
 		keysGroup.POST("/page", keysController.PageKeyHandler)
+		keysGroup.POST("/changeStatus", keysController.ChangeStatusHandler)
 		keysGroup.DELETE("/rm/:id", keysController.DeleteKeyHandler)
 	}
 }

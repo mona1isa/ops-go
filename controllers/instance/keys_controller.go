@@ -73,6 +73,21 @@ func (k *KeysController) PageKeyHandler(ctx *gin.Context) {
 	k.Success(ctx, info)
 }
 
+// ChangeStatusHandler 修改key状态
+func (k *KeysController) ChangeStatusHandler(ctx *gin.Context) {
+	request := api.ChangeStatusRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		k.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := instance.KeysService{}
+	if err := service.ChangeStatus(request); err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.JustSuccess(ctx)
+}
+
 // DeleteKeyHandler 删除key
 func (k *KeysController) DeleteKeyHandler(ctx *gin.Context) {
 	id := ctx.Param("id")
