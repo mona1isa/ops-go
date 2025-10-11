@@ -27,7 +27,6 @@ func (s *InstanceService) AddInstance(request api.AddInstanceRequest) (err error
 		MemMb:  request.MemMb,
 		DiskGb: request.DiskGb,
 		Ip:     request.Ip,
-		Port:   request.Port,
 		Os:     request.Os,
 		Status: request.Status,
 	}
@@ -62,7 +61,6 @@ func (s *InstanceService) EditInstance(request api.UpdateInstanceRequest) (err e
 	instance.MemMb = request.MemMb
 	instance.DiskGb = request.DiskGb
 	instance.Ip = request.Ip
-	instance.Port = request.Port
 	instance.Os = request.Os
 	instance.Status = request.Status
 	instance.UpdateBy = request.UpdateBy

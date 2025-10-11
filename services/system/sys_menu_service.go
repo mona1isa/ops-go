@@ -151,6 +151,7 @@ func (*MenuService) Edit(request *api.EditMenuRequest) error {
 	}
 
 	updates := map[string]any{
+		"parent_id":      request.ParentId,
 		"name":           request.Name,
 		"order_num":      request.OrderNum,
 		"path":           request.Path,

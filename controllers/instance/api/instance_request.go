@@ -8,7 +8,6 @@ type AddInstanceRequest struct {
 	MemMb    int    `json:"memMb"`
 	DiskGb   int    `json:"diskGb"`
 	Ip       string `json:"ip"`
-	Port     int    `json:"port"`
 	Os       string `json:"os"`
 	Status   string `json:"status"`
 	CreateBy string `json:"createBy"`

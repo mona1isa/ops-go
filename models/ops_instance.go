@@ -13,7 +13,6 @@ type OpsInstance struct {
 	MemMb      int    `gorm:"column:mem_mb;type:int(11);not null;comment:内存大小(MB)" json:"memMb"`
 	DiskGb     int    `gorm:"column:disk_gb;type:int(11);not null;comment:磁盘大小(GB)" json:"diskGb"`
 	Ip         string `gorm:"type:varchar(32);not null;comment:IP地址" json:"ip"`
-	Port       int    `gorm:"type:int(11);not null;comment:端口" json:"port"`
 	Os         string `gorm:"type:varchar(32);not null;comment:操作系统" json:"os"`
 	Status     string `gorm:"type:varchar(1);default:1;comment:状态（1 正常 0 禁用）" json:"status"`
 	Base
