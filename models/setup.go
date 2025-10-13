@@ -35,6 +35,8 @@ func InitDB() {
 		&OpsInstance{},
 		&OpsKey{},
 		&OpsInstanceKey{},
+		&OpsGroup{},
+		&OpsInstanceGroup{},
 	}
 
 	for _, table := range tables {

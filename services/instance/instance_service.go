@@ -129,7 +129,7 @@ func (s *InstanceService) GetInstanceDetail(id int) (instance models.OpsInstance
 	}
 	// 查询实例-凭证关系
 	var opsKeys []models.OpsKey
-	// select id, name from ops_key where id in (select key_id from ops_instance_key where instance_id = ?)
+	// select id, name from ops_key where id in (select key_id from ops_instance_keys where instance_id = ?)
 	if err := models.DB.Table("ops_key").Select("id, name").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&opsKeys).Error; err != nil {
 		return instance, errors.New("查询主机详情失败")
 	}
