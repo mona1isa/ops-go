@@ -112,7 +112,7 @@ func (s *InstanceService) PageInstance(request api.PageInstanceRequest) (models.
 		id := instance.ID
 		// select * from ops_key where id in(select key_id from ops_instance_keys where instance_id =?)
 		var opsKeys []models.OpsKey
-		if err := models.DB.Table("ops_key").Select("id, name, type").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&opsKeys).Error; err != nil {
+		if err := models.DB.Table("ops_key").Select("id, name, type, protocol").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&opsKeys).Error; err != nil {
 			return pageResult, errors.New("查询主机列表失败")
 		}
 		instance.BindingKeys = opsKeys
@@ -130,7 +130,7 @@ func (s *InstanceService) GetInstanceDetail(id int) (instance models.OpsInstance
 	// 查询实例-凭证关系
 	var opsKeys []models.OpsKey
 	// select id, name from ops_key where id in (select key_id from ops_instance_keys where instance_id = ?)
-	if err := models.DB.Table("ops_key").Select("id, name").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&opsKeys).Error; err != nil {
+	if err := models.DB.Table("ops_key").Select("id, name, type, protocol").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", id).Find(&opsKeys).Error; err != nil {
 		return instance, errors.New("查询主机详情失败")
 	}
 	instance.BindingKeys = opsKeys
@@ -170,6 +170,26 @@ func (s *InstanceService) KeyBinding(request api.InstanceKeyBindingRequest) (err
 		return errors.New("绑定密钥失败")
 	}
 
+	return nil
+}
+
+// UnBindingKey 主机解绑密钥
+func (s *InstanceService) UnBindingKey(request api.InstanceKeyUnbindingRequest) (err error) {
+	instanceId := request.InstanceId
+	keyIds := request.KeyIds
+
+	// 检查实例是否存在
+	var instance models.OpsInstance
+	if err := models.DB.First(&instance, instanceId).Error; err != nil {
+		log.Println("绑定密钥失败：", err)
+		return errors.New("实例不存在, 绑定密钥失败")
+	}
+
+	// 删除主机-凭证关系
+	if err := models.DB.Where("instance_id = ? and key_id in (?)", instanceId, keyIds).Delete(&models.OpsInstanceKey{}).Error; err != nil {
+		log.Println("解绑密钥失败：", err)
+		return errors.New("解绑密钥失败")
+	}
 	return nil
 }
 

@@ -35,3 +35,8 @@ type InstanceKeyBindingRequest struct {
 	InstanceId int `json:"instanceId" required:"true"`
 	KeyId      int `json:"keyId" required:"true"`
 }
+
+type InstanceKeyUnbindingRequest struct {
+	InstanceId int   `json:"instanceId" required:"true"`
+	KeyIds     []int `json:"keyIds" required:"true"`
+}

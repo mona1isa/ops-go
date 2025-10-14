@@ -112,6 +112,7 @@ func (c *InstanceController) DeleteInstanceHandler(ctx *gin.Context) {
 	c.JustSuccess(ctx)
 }
 
+// KeyBindingHandler 绑定key
 func (c *InstanceController) KeyBindingHandler(ctx *gin.Context) {
 	request := api.InstanceKeyBindingRequest{}
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -128,6 +129,22 @@ func (c *InstanceController) KeyBindingHandler(ctx *gin.Context) {
 	c.JustSuccess(ctx)
 }
 
+// UnBindingKeyHandler 解绑key
+func (c *InstanceController) UnBindingKeyHandler(ctx *gin.Context) {
+	request := api.InstanceKeyUnbindingRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := instance.InstanceService{}
+	if err := service.UnBindingKey(request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JustSuccess(ctx)
+}
+
+// TestConnectHandler 测试连接
 func (c *InstanceController) TestConnectHandler(ctx *gin.Context) {
 	request := api.InstanceKeyBindingRequest{}
 	if err := ctx.ShouldBindJSON(&request); err != nil {
