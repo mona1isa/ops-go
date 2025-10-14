@@ -39,8 +39,7 @@ func (s *GroupService) AddGroup(request api.AddGroupRequest) (err error) {
 
 // EditGroup 编辑分组
 func (s *GroupService) EditGroup(request api.UpdateGroupRequest) (err error) {
-	idStr := request.Id
-	id, _ := strconv.Atoi(idStr)
+	id := request.Id
 	name := request.Name
 
 	var group models.OpsGroup
@@ -104,6 +103,27 @@ func buildTree(groups []models.OpsGroup) []*models.OpsGroup {
 
 // DeleteGroup 删除分组
 func (s *GroupService) DeleteGroup(id int) (err error) {
+	// 校验是否存在子分组，如果有则不允许删除
+	var count int64
+	if err = models.DB.Model(&models.OpsGroup{}).Where("parent_id = ?", id).Count(&count).Error; err != nil {
+		log.Println("查询分组是否存在失败：", err)
+		return errors.New("查询分组是否存在失败")
+	}
+	if count > 0 {
+		return errors.New("存在子分组，不允许删除")
+	}
+
+	// 校验分组下是否存在实例，如果有则不允许删除
+	var instanceCount int64
+	if err := models.DB.Model(&models.OpsInstanceGroup{}).Where("group_id = ?", id).Count(&instanceCount).Error; err != nil {
+		log.Println("查询分组是否存在实例失败：", err)
+		return errors.New("查询分组是否存在实例失败")
+	}
+	if instanceCount > 0 {
+		return errors.New("分组下存在实例，不允许删除")
+	}
+
+	// 校验分组是否存在实例，如果有则不允许删除
 	if err = models.DB.Where("id = ?", id).Delete(&models.OpsGroup{}).Error; err != nil {
 		log.Println("删除分组失败：", err)
 		return errors.New("删除分组失败")

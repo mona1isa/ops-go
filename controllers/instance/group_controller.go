@@ -21,6 +21,10 @@ func (c *GroupController) AddGroupHandler(ctx *gin.Context) {
 		return
 	}
 
+	userId := c.GetUserId(ctx)
+	request.UpdateBy = userId
+	request.CreateBy = userId
+
 	service := instance.GroupService{}
 	if err := service.AddGroup(request); err != nil {
 		c.Failure(ctx, http.StatusInternalServerError, err.Error())
@@ -37,6 +41,9 @@ func (c *GroupController) EditGroupHandler(ctx *gin.Context) {
 		c.Failure(ctx, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	userId := c.GetUserId(ctx)
+	request.UpdateBy = userId
 
 	service := instance.GroupService{}
 	if err := service.EditGroup(request); err != nil {

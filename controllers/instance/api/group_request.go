@@ -14,7 +14,7 @@ type AddGroupRequest struct {
 }
 
 type UpdateGroupRequest struct {
-	Id string `json:"id"`
+	Id int `json:"id"`
 	AddGroupRequest
 }
 
