@@ -114,3 +114,20 @@ func (k *KeysController) AvailableKeysHandler(ctx *gin.Context) {
 	}
 	k.Success(ctx, info)
 }
+
+// AvailableKeysBySystemHandler 获取可用于绑定该主机的key(根据系统类型过滤)
+func (k *KeysController) AvailableKeysBySystemHandler(ctx *gin.Context) {
+	request := api.OsTypeRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		k.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	service := instance.KeysService{}
+	info, err := service.AvailableKeysBySystem(request)
+	if err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.Success(ctx, info)
+}

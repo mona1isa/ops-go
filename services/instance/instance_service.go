@@ -39,6 +39,23 @@ func (s *InstanceService) AddInstance(request api.AddInstanceRequest) (err error
 		log.Println("添加主机失败：", err)
 		return errors.New("添加主机失败")
 	}
+	// 如果携带了登录凭证，则保存凭证与主机的关系
+	if len(request.BindingKeys) > 0 {
+		// 检查密钥是否存在
+		var bindingKeys []models.OpsInstanceKey
+		for _, keyId := range request.BindingKeys {
+			var key models.OpsKey
+			if err := models.DB.First(&key, keyId).Error; err != nil {
+				log.Println("绑定密钥失败：", err)
+				return errors.New("密钥不存在, 绑定密钥失败")
+			}
+			bindingKeys = append(bindingKeys, models.OpsInstanceKey{InstanceId: instance.ID, KeyId: keyId})
+		}
+		if err := models.DB.Create(&bindingKeys).Error; err != nil {
+			log.Println("绑定密钥失败：", err)
+			return errors.New("绑定密钥失败")
+		}
+	}
 	return
 }
 

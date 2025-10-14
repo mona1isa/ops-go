@@ -18,5 +18,6 @@ func (*KeysRouter) Setup(r *gin.RouterGroup) {
 		keysGroup.POST("/changeStatus", keysController.ChangeStatusHandler)
 		keysGroup.DELETE("/rm/:id", keysController.DeleteKeyHandler)
 		keysGroup.GET("/available/list/:instanceId", keysController.AvailableKeysHandler)
+		keysGroup.POST("/available/listBy/osType", keysController.AvailableKeysBySystemHandler)
 	}
 }

@@ -178,3 +178,24 @@ func (s *KeysService) AvailableKeys(instanceId int) (keys []models.OpsKey, err e
 	}
 	return keys, nil
 }
+
+// AvailableKeysBySystem 获取系统可用凭证（创建主机时使用）
+func (s *KeysService) AvailableKeysBySystem(request api.OsTypeRequest) (keys []models.OpsKey, err error) {
+	osType := request.OsType
+	if osType == "" {
+		if err := models.DB.Where("status = ? AND del_flag = ?", "1", "0").Find(&keys).Error; err != nil {
+			return nil, errors.New("查询密钥失败")
+		}
+		return keys, nil
+	}
+	protocol := "ssh"
+	if strings.EqualFold(osType, "windows") {
+		protocol = "rdp"
+	}
+	// 获取所有凭证
+	if err := models.DB.Where("protocol = ? AND status = ? AND del_flag = ?", protocol, "1", "0").Find(&keys).Error; err != nil {
+		log.Println("查询密钥失败：", err)
+		return nil, errors.New("查询密钥失败")
+	}
+	return keys, nil
+}
