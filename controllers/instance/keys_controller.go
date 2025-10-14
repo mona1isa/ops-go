@@ -32,6 +32,10 @@ func (k *KeysController) AddKeyHandler(ctx *gin.Context) {
 		return
 	}
 
+	userId := k.GetUserId(ctx)
+	request.CreateBy = userId
+	request.UpdateBy = userId
+
 	service := instance.KeysService{}
 	if err := service.AddKey(request); err != nil {
 		k.Failure(ctx, http.StatusInternalServerError, err.Error())
