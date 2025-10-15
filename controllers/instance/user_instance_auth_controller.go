@@ -1,0 +1,88 @@
+package instance
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/zhany/ops-go/controllers"
+	"github.com/zhany/ops-go/services/instance"
+	"net/http"
+)
+
+type UserInstanceAuthController struct {
+	controllers.BaseController
+}
+
+// AddHandler 添加用户主机/主机分组授权
+func (auth *UserInstanceAuthController) AddHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.UserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err := userInstanceAuth.CreateUserInstanceAuth()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	auth.JustSuccess(ctx)
+}
+
+// DeleteHandler 删除用户主机/主机分组授权
+func (auth *UserInstanceAuthController) DeleteHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.UserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	err := userInstanceAuth.DeleteUserInstanceAuth()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.JustSuccess(ctx)
+}
+
+// UserInstanceAuthHandler 获取用户主机/主机分组授权
+func (auth *UserInstanceAuthController) UserInstanceAuthHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.UserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	instances, err := userInstanceAuth.GetUserInstanceAuth()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, instances)
+}
+
+// ListInstanceHandler 获取用户实例列表
+func (auth *UserInstanceAuthController) ListInstanceHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.UserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	instances, err := userInstanceAuth.GetUserInstances()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, instances)
+}
+
+func (auth *UserInstanceAuthController) PageUserInstancesHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.PageUserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	instances, err := userInstanceAuth.GetUserInstancesPage()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, instances)
+}

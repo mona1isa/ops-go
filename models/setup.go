@@ -37,6 +37,8 @@ func InitDB() {
 		&OpsInstanceKey{},
 		&OpsGroup{},
 		&OpsInstanceGroup{},
+		&OpsUserInstanceAuth{},
+		&OpsUserInstanceKeyAuth{},
 	}
 
 	for _, table := range tables {
