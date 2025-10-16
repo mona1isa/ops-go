@@ -102,3 +102,35 @@ func (auth *UserInstanceAuthController) PageUserGroupHandler(ctx *gin.Context) {
 	}
 	auth.Success(ctx, groups)
 }
+
+// AvailableInstancesHandler 获取未绑定的主机列表
+func (auth *UserInstanceAuthController) AvailableInstancesHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.PageUserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	instances, err := userInstanceAuth.GetInstances()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, instances)
+}
+
+// AvailableGroupsHandler 获取未绑定的主机分组列表
+func (auth *UserInstanceAuthController) AvailableGroupsHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.PageUserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	groups, err := userInstanceAuth.GetGroups()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, groups)
+}

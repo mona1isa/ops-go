@@ -27,6 +27,8 @@ type UserInstanceAuthService interface {
 	GetUserInstanceAuth(userId int) (map[string]any, error)
 	GetUserInstances(userId int) ([]models.OpsInstance, error)
 	GetUserInstancesPage(pageUserInstanceAuth *PageUserInstanceAuth) (map[string]any, error)
+	GetInstances(pageUserInstanceAuth *PageUserInstanceAuth) (map[string]any, error)
+	GetGroups(pageUserInstanceAuth *PageUserInstanceAuth) (map[string]any, error)
 }
 
 // CreateUserInstanceAuth 创建用户-主机/分组授权关系
@@ -344,5 +346,88 @@ func (page *PageUserInstanceAuth) GetUserGroupsPage() (map[string]any, error) {
 		"pageSize":  pageSize,
 	}
 
+	return result, nil
+}
+
+// GetInstances 获取可绑定主机列表
+func (page *PageUserInstanceAuth) GetInstances() (map[string]any, error) {
+	var result = make(map[string]any)
+
+	userId := page.UserId
+	pageSize := page.PageSize
+	pageNum := page.PageNum
+	offset := (pageNum - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	// 获取用户已授权的主机
+	var hasAuthedInstanceIds []int
+	if err := models.DB.Model(&models.OpsUserInstanceAuth{}).Where("user_id = ? and auth_type = 1", userId).Select("instance_id").Find(&hasAuthedInstanceIds).Error; err != nil {
+		log.Println("获取用户已授权主机异常: ", err)
+		return result, errors.New("获取用户已授权主机异常")
+	}
+
+	var total int64
+	var instances []models.OpsInstance
+	if len(hasAuthedInstanceIds) == 0 {
+		if err := models.DB.Model(&models.OpsInstance{}).Where("del_flag = ?", "0").Offset(offset).Limit(pageSize).Find(&instances).Error; err != nil {
+			log.Println("获取主机信息异常: ", err)
+			return result, errors.New("获取主机信息异常")
+		}
+		// 获取总条数
+		models.DB.Model(&models.OpsInstance{}).Where("del_flag = ?", "0").Count(&total)
+	} else {
+		if err := models.DB.Table("ops_instance").Select("ops_instance.*").Where("ops_instance.del_flag = ? and ops_instance.id not in (?)", "0", hasAuthedInstanceIds).Offset(offset).Limit(pageSize).Find(&instances).Error; err != nil {
+			log.Println("获取主机信息异常: ", err)
+			return result, errors.New("获取主机信息异常")
+		}
+		// 获取总条数
+		models.DB.Table("ops_instance").Select("ops_instance.*").Where("ops_instance.del_flag = ? and ops_instance.id not in (?)", "0", hasAuthedInstanceIds).Count(&total)
+	}
+	result["instances"] = instances
+	result["total"] = total
+	result["pageNum"] = pageNum
+	result["pageSize"] = pageSize
+	return result, nil
+}
+
+func (page *PageUserInstanceAuth) GetGroups() (map[string]any, error) {
+	var result = make(map[string]any)
+
+	userId := page.UserId
+	pageSize := page.PageSize
+	pageNum := page.PageNum
+	offset := (pageNum - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	// 获取用户已授权的主机分组
+	var hasAuthedGroupIds []int
+	if err := models.DB.Model(&models.OpsUserInstanceAuth{}).Where("user_id = ? and auth_type = 2", userId).Select("group_id").Find(&hasAuthedGroupIds).Error; err != nil {
+		log.Println("获取用户已授权主机分组异常: ", err)
+		return result, errors.New("获取用户已授权主机分组异常")
+	}
+	var total int64
+	var groups []models.OpsGroup
+	if len(hasAuthedGroupIds) == 0 {
+		if err := models.DB.Model(&models.OpsGroup{}).Where("del_flag = ?", "0").Offset(offset).Limit(pageSize).Find(&groups).Error; err != nil {
+			log.Println("获取主机分组信息异常: ", err)
+			return result, errors.New("获取主机分组信息异常")
+		}
+		// 获取总条数
+		models.DB.Model(&models.OpsGroup{}).Where("del_flag = ?", "0").Count(&total)
+	} else {
+		if err := models.DB.Table("ops_group").Select("ops_group.*").Where("ops_group.del_flag = ? and ops_group.id not in (?)", "0", hasAuthedGroupIds).Offset(offset).Limit(pageSize).Find(&groups).Error; err != nil {
+			log.Println("获取主机分组信息异常: ", err)
+			return result, errors.New("获取主机分组信息异常")
+		}
+		// 获取总条数
+		models.DB.Table("ops_group").Select("ops_group.*").Where("ops_group.del_flag = ? and ops_group.id not in (?)", "0", hasAuthedGroupIds).Count(&total)
+	}
+
+	result["groups"] = groups
+	result["total"] = total
+	result["pageNum"] = pageNum
+	result["pageSize"] = pageSize
 	return result, nil
 }
