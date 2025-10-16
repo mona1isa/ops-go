@@ -308,3 +308,41 @@ func (page *PageUserInstanceAuth) GetUserInstancesPage() (map[string]any, error)
 	}
 	return result, nil
 }
+
+func (page *PageUserInstanceAuth) GetUserGroupsPage() (map[string]any, error) {
+	result := make(map[string]any)
+
+	userId := page.UserId
+	if userId == 0 {
+		return result, errors.New("用户ID不能为空")
+	}
+
+	var groups []models.OpsGroup
+	if err := models.DB.Table("ops_group").Select("ops_group.*").Joins("JOIN ops_user_instance_auth ON ops_group.id = ops_user_instance_auth.group_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2", userId).Find(&groups).Error; err != nil {
+		log.Println("获取用户授权主机分组信息异常: ", err)
+		return result, errors.New("获取用户授权主机分组信息异常")
+	}
+
+	pageNum := page.PageNum
+	pageSize := page.PageSize
+	// 对groups 进行分页
+	start := (pageNum - 1) * pageSize
+	end := pageNum * pageSize
+	if start >= len(groups) {
+		return result, nil
+	}
+	if end > len(groups) {
+		end = len(groups)
+	}
+	totalPage := int(math.Ceil(float64(len(groups)) / float64(pageSize)))
+	//将分页后的结果存入result中
+	result = map[string]any{
+		"groups":    groups[start:end],
+		"total":     len(groups),
+		"totalPage": totalPage,
+		"pageNum":   pageNum,
+		"pageSize":  pageSize,
+	}
+
+	return result, nil
+}

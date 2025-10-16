@@ -73,6 +73,7 @@ func (auth *UserInstanceAuthController) ListInstanceHandler(ctx *gin.Context) {
 	auth.Success(ctx, instances)
 }
 
+// PageUserInstancesHandler 分页获取用户实例列表
 func (auth *UserInstanceAuthController) PageUserInstancesHandler(ctx *gin.Context) {
 	userInstanceAuth := new(instance.PageUserInstanceAuth)
 	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
@@ -85,4 +86,19 @@ func (auth *UserInstanceAuthController) PageUserInstancesHandler(ctx *gin.Contex
 		return
 	}
 	auth.Success(ctx, instances)
+}
+
+// PageUserGroupHandler 分页获取已授权给用户的主机分组
+func (auth *UserInstanceAuthController) PageUserGroupHandler(ctx *gin.Context) {
+	userInstanceAuth := new(instance.PageUserInstanceAuth)
+	if err := ctx.ShouldBindJSON(&userInstanceAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	groups, err := userInstanceAuth.GetUserGroupsPage()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, groups)
 }
