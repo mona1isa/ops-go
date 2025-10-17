@@ -382,7 +382,7 @@ func (page *PageUserInstanceAuth) GetInstances() (map[string]any, error) {
 			return result, errors.New("获取主机信息异常")
 		}
 		// 获取总条数
-		models.DB.Table("ops_instance").Select("ops_instance.*").Where("ops_instance.del_flag = ? and ops_instance.id not in (?)", "0", hasAuthedInstanceIds).Count(&total)
+		models.DB.Table("ops_instance").Select("ops_instance.id").Where("ops_instance.del_flag = ? and ops_instance.id not in (?)", "0", hasAuthedInstanceIds).Count(&total)
 	}
 	result["instances"] = instances
 	result["total"] = total
@@ -422,7 +422,7 @@ func (page *PageUserInstanceAuth) GetGroups() (map[string]any, error) {
 			return result, errors.New("获取主机分组信息异常")
 		}
 		// 获取总条数
-		models.DB.Table("ops_group").Select("ops_group.*").Where("ops_group.del_flag = ? and ops_group.id not in (?)", "0", hasAuthedGroupIds).Count(&total)
+		models.DB.Table("ops_group").Select("ops_group.id").Where("ops_group.del_flag = ? and ops_group.id not in (?)", "0", hasAuthedGroupIds).Count(&total)
 	}
 
 	result["groups"] = groups
