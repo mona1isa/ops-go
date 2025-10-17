@@ -19,5 +19,6 @@ func (*UserInstanceAuthRouter) Setup(r *gin.RouterGroup) {
 		group.POST("/pageUserGroups", userInstanceAuthController.PageUserGroupHandler)
 		group.POST("/available/instances", userInstanceAuthController.AvailableInstancesHandler)
 		group.POST("/available/groups", userInstanceAuthController.AvailableGroupsHandler)
+		group.POST("/available/keys", userInstanceAuthController.AvailableKeysHandler)
 	}
 }

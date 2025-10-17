@@ -134,3 +134,17 @@ func (auth *UserInstanceAuthController) AvailableGroupsHandler(ctx *gin.Context)
 	}
 	auth.Success(ctx, groups)
 }
+
+func (auth *UserInstanceAuthController) AvailableKeysHandler(ctx *gin.Context) {
+	var userInstanceKey instance.UserInstanceKey
+	if err := ctx.ShouldBindJSON(&userInstanceKey); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	keys, err := userInstanceKey.GetUserInstanceKeys()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, keys)
+}

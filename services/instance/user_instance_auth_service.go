@@ -21,6 +21,12 @@ type PageUserInstanceAuth struct {
 	PageSize int `json:"pageSize"`
 }
 
+type UserInstanceKey struct {
+	UserId     int `json:"userId"`
+	InstanceId int `json:"instanceId"`
+	KeyId      int `json:"keyId"`
+}
+
 type UserInstanceAuthService interface {
 	CreateUserInstanceAuth(userInstanceAuth *UserInstanceAuth) error
 	DeleteUserInstanceAuth(userInstanceAuth *UserInstanceAuth) error
@@ -29,6 +35,8 @@ type UserInstanceAuthService interface {
 	GetUserInstancesPage(pageUserInstanceAuth *PageUserInstanceAuth) (map[string]any, error)
 	GetInstances(pageUserInstanceAuth *PageUserInstanceAuth) (map[string]any, error)
 	GetGroups(pageUserInstanceAuth *PageUserInstanceAuth) (map[string]any, error)
+	// 获取用户主机可绑定的凭证
+	GetUserInstanceKeys(userInstanceKey *UserInstanceKey) (map[string]any, error)
 }
 
 // CreateUserInstanceAuth 创建用户-主机/分组授权关系
@@ -429,5 +437,68 @@ func (page *PageUserInstanceAuth) GetGroups() (map[string]any, error) {
 	result["total"] = total
 	result["pageNum"] = pageNum
 	result["pageSize"] = pageSize
+	return result, nil
+}
+
+// GetUserInstanceKeys 获取用户授权主机可绑定凭证列表
+func (info *UserInstanceKey) GetUserInstanceKeys() (map[string]any, error) {
+	var result = make(map[string]any)
+	userId := info.UserId
+	instanceId := info.InstanceId
+	if userId == 0 {
+		return result, errors.New("用户id不能为空")
+	}
+	if instanceId == 0 {
+		return result, errors.New("主机id不能为空")
+	}
+	// 校验主机是否存在
+	var instance models.OpsInstance
+	if err := models.DB.Where("id = ?", instanceId).First(&instance).Error; err != nil {
+		log.Println("主机不存在: ", err)
+		return result, errors.New("主机不存在")
+	}
+
+	// 查询已授权的凭证
+	var keyIds []int
+	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and instance_id = ? ", userId, instanceId).Select("key_id").Find(&keyIds).Error; err != nil {
+		log.Println("获取用户已授权凭证异常: ", err)
+		return result, errors.New("获取用户已授权凭证异常")
+	}
+
+	// 查询与主机绑定的凭证
+	var bindKeyIds []int
+	if err := models.DB.Model(&models.OpsInstanceKey{}).Where("instance_id = ?", instanceId).Select("key_id").Find(&bindKeyIds).Error; err != nil {
+		log.Println("获取主机绑定凭证异常: ", err)
+		return result, errors.New("获取主机绑定凭证异常")
+	}
+	if len(bindKeyIds) == 0 {
+		return result, errors.New("主机未绑定凭证，请先绑定凭证后再授权")
+	}
+
+	var protocol = "ssh"
+	if instance.Os == "windows" {
+		protocol = "rdp"
+	}
+	var keys []models.OpsKey
+	if len(keyIds) == 0 {
+		if err := models.DB.Model(&models.OpsKey{}).Where("protocol = ? and id in (?)", protocol, bindKeyIds).Find(&keys).Error; err != nil {
+			return result, errors.New("获取凭证列表异常")
+		}
+	} else {
+		// 与主机绑定的凭证
+		var tmpKeys []models.OpsKey
+		if err := models.DB.Table("ops_key").Select("ops_key.*").Where("ops_key.protocol = ? and ops_key.id in (?)", protocol, bindKeyIds).Find(&tmpKeys).Error; err != nil {
+			return result, errors.New("获取凭证列表异常")
+		}
+		// 过滤掉已授权的凭证
+		for _, key := range tmpKeys {
+			for _, keyId := range keyIds {
+				if key.ID != keyId {
+					keys = append(keys, key)
+				}
+			}
+		}
+	}
+	result["keys"] = keys
 	return result, nil
 }
