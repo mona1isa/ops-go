@@ -148,3 +148,31 @@ func (auth *UserInstanceAuthController) AvailableKeysHandler(ctx *gin.Context) {
 	}
 	auth.Success(ctx, keys)
 }
+
+func (auth *UserInstanceAuthController) CreateUserInstanceKeyAuthHandler(ctx *gin.Context) {
+	var userInstanceKeyAuth instance.UserInstanceKeyAuth
+	if err := ctx.ShouldBindJSON(&userInstanceKeyAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	err := userInstanceKeyAuth.CreateUserInstanceKeyAuth()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.JustSuccess(ctx)
+}
+
+// DeleteUserInstanceKeyAuth 删除用户主机/主机分组授权
+func (auth *UserInstanceAuthController) DeleteUserInstanceKeyAuthHandler(ctx *gin.Context) {
+	var userInstanceKeyAuth instance.UserInstanceKeyAuth
+	if err := ctx.ShouldBindJSON(&userInstanceKeyAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := userInstanceKeyAuth.DeleteUserInstanceKeyAuth(); err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err)
+		return
+	}
+	auth.JustSuccess(ctx)
+}

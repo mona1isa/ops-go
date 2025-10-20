@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/utils"
 	"log"
 	"math"
 )
@@ -27,6 +28,14 @@ type UserInstanceKey struct {
 	KeyId      int `json:"keyId"`
 }
 
+type UserInstanceKeyAuth struct {
+	InstanceId int `json:"instanceId"`
+	GroupId    int `json:"groupId"`
+	UserId     int `json:"userId"`
+	KeyId      int `json:"keyId"`
+	AuthType   int `json:"authType"` // 1 主机 2 分组   授权时二选一
+}
+
 type UserInstanceAuthService interface {
 	CreateUserInstanceAuth(userInstanceAuth *UserInstanceAuth) error
 	DeleteUserInstanceAuth(userInstanceAuth *UserInstanceAuth) error
@@ -37,6 +46,8 @@ type UserInstanceAuthService interface {
 	GetGroups(pageUserInstanceAuth *PageUserInstanceAuth) (map[string]any, error)
 	// 获取用户主机可绑定的凭证
 	GetUserInstanceKeys(userInstanceKey *UserInstanceKey) (map[string]any, error)
+	// 授权主机/分组-凭证-用户绑定关系
+	CreateUserInstanceKeyAuth(userInstanceKeyAuth *UserInstanceKeyAuth) error
 }
 
 // CreateUserInstanceAuth 创建用户-主机/分组授权关系
@@ -290,7 +301,7 @@ func (page *PageUserInstanceAuth) GetUserInstancesPage() (map[string]any, error)
 		return result, errors.New("用户ID不能为空")
 	}
 
-	var instances []models.OpsInstance
+	var instances []*models.OpsInstance
 	if err := models.DB.Table("ops_instance").Select("ops_instance.*").Joins("JOIN ops_user_instance_auth ON ops_instance.id = ops_user_instance_auth.instance_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 1", userId).Find(&instances).Error; err != nil {
 		log.Println("获取用户授权主机信息异常: ", err)
 		return result, errors.New("获取用户授权主机信息异常")
@@ -308,9 +319,21 @@ func (page *PageUserInstanceAuth) GetUserInstancesPage() (map[string]any, error)
 		end = len(instances)
 	}
 	totalPage := int(math.Ceil(float64(len(instances)) / float64(pageSize)))
+
+	// 处理主机分页并添加已授权凭证信息
+	var pageInstances = instances[start:end]
+	for _, instance := range pageInstances {
+		// SELECT ops_key.* FROM ops_key JOIN ops_user_instance_key_auth ON ops_key.id=ops_user_instance_key_auth.`key_id` WHERE ops_user_instance_key_auth.`instance_id` = ? AND ops_user_instance_key_auth.`user_id`=?
+		var bindKeys []models.OpsKey
+		if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.instance_id = ? AND ops_user_instance_key_auth.user_id = ?", instance.ID, userId).Find(&bindKeys).Error; err != nil {
+			log.Println("获取主机已授权凭证信息异常: ", err)
+		}
+		instance.BindingKeys = bindKeys
+	}
+
 	//将分页后的结果存入result中
 	result = map[string]any{
-		"instances": instances[start:end],
+		"instances": pageInstances,
 		"total":     len(instances),
 		"totalPage": totalPage,
 		"pageNum":   pageNum,
@@ -460,7 +483,7 @@ func (info *UserInstanceKey) GetUserInstanceKeys() (map[string]any, error) {
 
 	// 查询已授权的凭证
 	var keyIds []int
-	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and instance_id = ? ", userId, instanceId).Select("key_id").Find(&keyIds).Error; err != nil {
+	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and instance_id = ? and auth_type = 1 ", userId, instanceId).Select("key_id").Find(&keyIds).Error; err != nil {
 		log.Println("获取用户已授权凭证异常: ", err)
 		return result, errors.New("获取用户已授权凭证异常")
 	}
@@ -479,26 +502,81 @@ func (info *UserInstanceKey) GetUserInstanceKeys() (map[string]any, error) {
 	if instance.Os == "windows" {
 		protocol = "rdp"
 	}
+
+	var resultKeys []models.OpsKey
 	var keys []models.OpsKey
 	if len(keyIds) == 0 {
 		if err := models.DB.Model(&models.OpsKey{}).Where("protocol = ? and id in (?)", protocol, bindKeyIds).Find(&keys).Error; err != nil {
 			return result, errors.New("获取凭证列表异常")
 		}
+		resultKeys = keys
 	} else {
 		// 与主机绑定的凭证
 		var tmpKeys []models.OpsKey
 		if err := models.DB.Table("ops_key").Select("ops_key.*").Where("ops_key.protocol = ? and ops_key.id in (?)", protocol, bindKeyIds).Find(&tmpKeys).Error; err != nil {
 			return result, errors.New("获取凭证列表异常")
 		}
-		// 过滤掉已授权的凭证
+		// 从与主机绑定的key 中过滤掉已授权的凭证，得到与主机绑定但未授权的凭证
 		for _, key := range tmpKeys {
-			for _, keyId := range keyIds {
-				if key.ID != keyId {
-					keys = append(keys, key)
-				}
+			if !utils.Contains(keyIds, key.ID) {
+				resultKeys = append(resultKeys, key)
 			}
 		}
+
 	}
-	result["keys"] = keys
+	result["keys"] = resultKeys
 	return result, nil
+}
+
+// CreateUserInstanceKeyAuth  创建主机凭证授权
+func (info *UserInstanceKeyAuth) CreateUserInstanceKeyAuth() error {
+	userId := info.UserId
+	instanceId := info.InstanceId
+	keyId := info.KeyId
+	if userId == 0 {
+		return errors.New("用户id不能为空")
+	}
+	if instanceId == 0 {
+		return errors.New("主机id不能为空")
+	}
+	// 校验主机是否存在
+	var instance models.OpsInstance
+	if err := models.DB.Where("id = ?", instanceId).First(&instance).Error; err != nil {
+		log.Println("主机不存在: ", err)
+		return errors.New("主机不存在")
+	}
+
+	if err := models.DB.Create(&models.OpsUserInstanceKeyAuth{
+		UserId:     userId,
+		InstanceId: instanceId,
+		KeyId:      keyId,
+		AuthType:   1,
+	}).Error; err != nil {
+		log.Println("创建主机凭证授权异常: ", err)
+		return errors.New("创建主机凭证授权异常")
+	}
+
+	return nil
+}
+
+// 解除用户主机登录凭证授权
+func (info *UserInstanceKeyAuth) DeleteUserInstanceKeyAuth() error {
+	userId := info.UserId
+	instanceId := info.InstanceId
+	keyId := info.KeyId
+	if userId == 0 {
+		return errors.New("用户id不能为空")
+	}
+	if instanceId == 0 {
+		return errors.New("主机id不能为空")
+	}
+	if keyId == 0 {
+		return errors.New("凭证id不能为空")
+	}
+
+	if err := models.DB.Where("user_id = ? and instance_id = ? and key_id = ? and auth_type = 1", userId, instanceId, keyId).Delete(&models.OpsUserInstanceKeyAuth{}).Error; err != nil {
+		log.Println("删除主机凭证授权异常: ", err)
+		return errors.New("删除主机凭证授权异常")
+	}
+	return nil
 }
