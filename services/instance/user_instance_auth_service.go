@@ -580,3 +580,23 @@ func (info *UserInstanceKeyAuth) DeleteUserInstanceKeyAuth() error {
 	}
 	return nil
 }
+
+// 查询用户主机已授权凭证信息
+func (info *UserInstanceKeyAuth) GetUserInstanceKeyAuth() ([]models.OpsKey, error) {
+	userId := info.UserId
+	instanceId := info.InstanceId
+	if userId == 0 {
+		return nil, errors.New("用户id不能为空")
+	}
+	if instanceId == 0 {
+		return nil, errors.New("主机id不能为空")
+	}
+
+	var keys []models.OpsKey
+	if err := models.DB.Table("ops_user_instance_key_auth").Select("ops_key.*").Joins("left join ops_key on ops_user_instance_key_auth.key_id = ops_key.id").Where("ops_user_instance_key_auth.user_id = ? and ops_user_instance_key_auth.instance_id = ? and ops_user_instance_key_auth.auth_type = 1", userId, instanceId).Find(&keys).Error; err != nil {
+		log.Println("获取用户已授权凭证异常: ", err)
+		return nil, errors.New("获取用户已授权凭证异常")
+	}
+
+	return keys, nil
+}

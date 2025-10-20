@@ -22,5 +22,6 @@ func (*UserInstanceAuthRouter) Setup(r *gin.RouterGroup) {
 		group.POST("/available/keys", userInstanceAuthController.AvailableKeysHandler)
 		group.POST("/instance/key/auth", userInstanceAuthController.CreateUserInstanceKeyAuthHandler)
 		group.POST("/instance/key/rm", userInstanceAuthController.DeleteUserInstanceKeyAuthHandler)
+		group.POST("/instance/key/list", userInstanceAuthController.GetUserInstanceKeyAuthHandler)
 	}
 }

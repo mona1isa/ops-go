@@ -176,3 +176,17 @@ func (auth *UserInstanceAuthController) DeleteUserInstanceKeyAuthHandler(ctx *gi
 	}
 	auth.JustSuccess(ctx)
 }
+
+func (auth *UserInstanceAuthController) GetUserInstanceKeyAuthHandler(ctx *gin.Context) {
+	var userInstanceKeyAuth instance.UserInstanceKeyAuth
+	if err := ctx.ShouldBindJSON(&userInstanceKeyAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := userInstanceKeyAuth.GetUserInstanceKeyAuth()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err)
+		return
+	}
+	auth.Success(ctx, result)
+}
