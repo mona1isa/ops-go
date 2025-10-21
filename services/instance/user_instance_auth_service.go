@@ -36,6 +36,25 @@ type UserInstanceKeyAuth struct {
 	AuthType   int `json:"authType"` // 1 主机 2 分组   授权时二选一
 }
 
+// 批量解除用户主机凭证授权关系
+type MultiKeyAuthCancel struct {
+	InstanceId int   `json:"instanceId"`
+	UserId     int   `json:"userId"`
+	KeyIds     []int `json:"keyIds"`
+}
+
+type InstanceGroupUserKeyAuth struct {
+	GroupId int `json:"groupId"`
+	UserId  int `json:"userId"`
+	KeyId   int `json:"keyId"`
+}
+
+type InstanceGroupUserKeyAuthMulti struct {
+	GroupId int   `json:"groupId"`
+	UserId  int   `json:"userId"`
+	KeyIds  []int `json:"keyIds"`
+}
+
 type UserInstanceAuthService interface {
 	CreateUserInstanceAuth(userInstanceAuth *UserInstanceAuth) error
 	DeleteUserInstanceAuth(userInstanceAuth *UserInstanceAuth) error
@@ -48,6 +67,15 @@ type UserInstanceAuthService interface {
 	GetUserInstanceKeys(userInstanceKey *UserInstanceKey) (map[string]any, error)
 	// 授权主机/分组-凭证-用户绑定关系
 	CreateUserInstanceKeyAuth(userInstanceKeyAuth *UserInstanceKeyAuth) error
+	// 解除主机-凭证-用户绑定关系
+	MultiKeyAuthCancelService(multiKeyAuthCancel *MultiKeyAuthCancel) error
+
+	// 获取主机分组可授权凭证
+	GroupAvailableKeyService(instanceGroupUserKeyAuth *InstanceGroupUserKeyAuth) ([]models.OpsKey, error)
+	// 主机分组授权凭证
+	GroupAuthKeyService(instanceGroupUserKeyAuth *InstanceGroupUserKeyAuth) error
+	// 主机分组解除授权凭证
+	GroupCancelAuthKeyService(instanceGroupUserKeyAuth *InstanceGroupUserKeyAuth) error
 }
 
 // CreateUserInstanceAuth 创建用户-主机/分组授权关系
@@ -350,7 +378,7 @@ func (page *PageUserInstanceAuth) GetUserGroupsPage() (map[string]any, error) {
 		return result, errors.New("用户ID不能为空")
 	}
 
-	var groups []models.OpsGroup
+	var groups []*models.OpsGroup
 	if err := models.DB.Table("ops_group").Select("ops_group.*").Joins("JOIN ops_user_instance_auth ON ops_group.id = ops_user_instance_auth.group_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2", userId).Find(&groups).Error; err != nil {
 		log.Println("获取用户授权主机分组信息异常: ", err)
 		return result, errors.New("获取用户授权主机分组信息异常")
@@ -368,9 +396,22 @@ func (page *PageUserInstanceAuth) GetUserGroupsPage() (map[string]any, error) {
 		end = len(groups)
 	}
 	totalPage := int(math.Ceil(float64(len(groups)) / float64(pageSize)))
+
+	var resultGroups = groups[start:end]
+	// 查询用户与主机分组已授权的凭证
+	for _, group := range resultGroups {
+		var keys []models.OpsKey
+		// SELECT ops_key.* FROM ops_key JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.`key_id` WHERE ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2
+		if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2", userId, group.ID).Find(&keys).Error; err != nil {
+			log.Println("获取用户已授权主机分组凭证异常: ", err)
+			return result, errors.New("获取用户已授权主机分组凭证异常")
+		}
+		group.BindingKeys = keys
+	}
+
 	//将分页后的结果存入result中
 	result = map[string]any{
-		"groups":    groups[start:end],
+		"groups":    resultGroups,
 		"total":     len(groups),
 		"totalPage": totalPage,
 		"pageNum":   pageNum,
@@ -439,7 +480,7 @@ func (page *PageUserInstanceAuth) GetGroups() (map[string]any, error) {
 		return result, errors.New("获取用户已授权主机分组异常")
 	}
 	var total int64
-	var groups []models.OpsGroup
+	var groups []*models.OpsGroup
 	if len(hasAuthedGroupIds) == 0 {
 		if err := models.DB.Model(&models.OpsGroup{}).Where("del_flag = ?", "0").Offset(offset).Limit(pageSize).Find(&groups).Error; err != nil {
 			log.Println("获取主机分组信息异常: ", err)
@@ -598,5 +639,144 @@ func (info *UserInstanceKeyAuth) GetUserInstanceKeyAuth() ([]models.OpsKey, erro
 		return nil, errors.New("获取用户已授权凭证异常")
 	}
 
+	return keys, nil
+}
+
+func (info *MultiKeyAuthCancel) MultiKeyAuthCancelService() error {
+	userId := info.UserId
+	instanceId := info.InstanceId
+	keyIds := info.KeyIds
+	if userId == 0 {
+		return errors.New("用户id不能为空")
+	}
+	if instanceId == 0 {
+		return errors.New("主机id不能为空")
+	}
+	if len(keyIds) == 0 {
+		return errors.New("凭证id不能为空")
+	}
+	if err := models.DB.Where("user_id = ? and instance_id = ? and key_id in (?) and auth_type = 1", userId, instanceId, keyIds).Delete(&models.OpsUserInstanceKeyAuth{}).Error; err != nil {
+		log.Println("删除主机凭证授权异常: ", err)
+		return errors.New("删除主机凭证授权异常")
+	}
+	return nil
+}
+
+// 获取主机分组可授权凭证
+func (info *InstanceGroupUserKeyAuth) GroupAvailableKeyService() ([]models.OpsKey, error) {
+	userId := info.UserId
+	groupId := info.GroupId
+	if userId == 0 {
+		return nil, errors.New("用户id不能为空")
+	}
+	if groupId == 0 {
+		return nil, errors.New("主机分组id不能为空")
+	}
+	var bindKeyIds []int
+	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and group_id = ? and auth_type = 2", userId, groupId).Select("key_id").Find(&bindKeyIds).Error; err != nil {
+		return nil, errors.New("获取主机分组已授权凭证异常")
+	}
+
+	// 查询所有未授权的凭证
+	var keys []models.OpsKey
+	if len(bindKeyIds) == 0 {
+		if err := models.DB.Model(&models.OpsKey{}).Find(&keys).Error; err != nil {
+			return nil, errors.New("获取主机分组可授权凭证异常")
+		}
+	} else {
+		if err := models.DB.Model(&models.OpsKey{}).Where("id not in (?)", bindKeyIds).Find(&keys).Error; err != nil {
+			return nil, errors.New("获取主机分组可授权凭证异常")
+		}
+	}
+
+	return keys, nil
+}
+
+// 主机分组授权凭证
+func (info *InstanceGroupUserKeyAuth) GroupAuthKeyService() error {
+	userId := info.UserId
+	groupId := info.GroupId
+	keyId := info.KeyId
+	if userId == 0 {
+		return errors.New("用户id不能为空")
+	}
+	if groupId == 0 {
+		return errors.New("主机分组id不能为空")
+	}
+	if keyId == 0 {
+		return errors.New("凭证id不能为空")
+	}
+
+	if err := models.DB.Create(&models.OpsUserInstanceKeyAuth{
+		UserId:   userId,
+		GroupId:  groupId,
+		KeyId:    keyId,
+		AuthType: 2,
+	}).Error; err != nil {
+		log.Println("创建主机分组凭证授权异常: ", err)
+	}
+
+	return nil
+}
+
+// 主机分组解除授权凭证(单个)
+func (info *InstanceGroupUserKeyAuth) GroupCancelAuthKeyService() error {
+	userId := info.UserId
+	groupId := info.GroupId
+	keyId := info.KeyId
+	if userId == 0 {
+		return errors.New("用户id不能为空")
+	}
+	if groupId == 0 {
+		return errors.New("主机分组id不能为空")
+	}
+	if keyId == 0 {
+		return errors.New("凭证id不能为空")
+	}
+	if err := models.DB.Where("user_id = ? and group_id = ? and key_id = ? and auth_type = 2", userId, groupId, keyId).Delete(&models.OpsUserInstanceKeyAuth{}).Error; err != nil {
+		log.Println("删除主机分组凭证授权异常: ", err)
+		return errors.New("删除主机分组凭证授权异常")
+	}
+	return nil
+}
+
+// 主机分组解除授权凭证(多个)
+func (info *InstanceGroupUserKeyAuthMulti) MultiGroupCancelAuthKeyService() error {
+	userId := info.UserId
+	groupId := info.GroupId
+	keyIds := info.KeyIds
+	if userId == 0 {
+		return errors.New("用户id不能为空")
+	}
+	if groupId == 0 {
+		return errors.New("主机分组id不能为空")
+	}
+	if len(keyIds) == 0 {
+		return errors.New("凭证id不能为空")
+	}
+
+	if err := models.DB.Where("user_id = ? and group_id = ? and key_id in (?) and auth_type = 2", userId, groupId, keyIds).Delete(&models.OpsUserInstanceKeyAuth{}).Error; err != nil {
+		log.Println("删除主机分组凭证授权异常: ", err)
+		return errors.New("删除主机分组凭证授权异常")
+	}
+
+	return nil
+}
+
+// GroupAuthedKeyService 获取主机分组已授权凭证
+func (info *InstanceGroupUserKeyAuth) GroupAuthedKeyService() ([]models.OpsKey, error) {
+	userId := info.UserId
+	groupId := info.GroupId
+	if userId == 0 {
+		return nil, errors.New("用户id不能为空")
+	}
+	if groupId == 0 {
+		return nil, errors.New("主机分组id不能为空")
+	}
+	var keys []models.OpsKey
+	// SELECT ops_key.* FROM ops_key JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.`key_id` WHERE ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2
+	if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("left join ops_user_instance_key_auth on ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2", userId, groupId).Find(&keys).Error; err != nil {
+		return nil, errors.New("获取主机分组已授权凭证异常")
+	}
 	return keys, nil
 }

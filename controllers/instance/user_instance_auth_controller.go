@@ -190,3 +190,89 @@ func (auth *UserInstanceAuthController) GetUserInstanceKeyAuthHandler(ctx *gin.C
 	}
 	auth.Success(ctx, result)
 }
+
+func (auth *UserInstanceAuthController) MultiKeyAuthCancelHandler(ctx *gin.Context) {
+	var multiKeyAuthCancel instance.MultiKeyAuthCancel
+	if err := ctx.ShouldBindJSON(&multiKeyAuthCancel); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := multiKeyAuthCancel.MultiKeyAuthCancelService(); err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err)
+		return
+	}
+	auth.JustSuccess(ctx)
+}
+
+// GroupAvailableKeyHandler 获取主机分组可授权凭证
+func (auth *UserInstanceAuthController) GroupAvailableKeyHandler(ctx *gin.Context) {
+	var groupAuth instance.InstanceGroupUserKeyAuth
+	if err := ctx.ShouldBindJSON(&groupAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	keys, err := groupAuth.GroupAvailableKeyService()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, keys)
+}
+
+// 主机分组授权凭证
+func (auth *UserInstanceAuthController) GroupAuthKeyHandler(ctx *gin.Context) {
+	var groupAuth instance.InstanceGroupUserKeyAuth
+	if err := ctx.ShouldBindJSON(&groupAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	err := groupAuth.GroupAuthKeyService()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.JustSuccess(ctx)
+}
+
+// 主机分组解除授权凭证
+func (auth *UserInstanceAuthController) GroupCancelAuthKeyHandler(ctx *gin.Context) {
+	var groupAuth instance.InstanceGroupUserKeyAuth
+	if err := ctx.ShouldBindJSON(&groupAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	err := groupAuth.GroupCancelAuthKeyService()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.JustSuccess(ctx)
+}
+
+func (auth *UserInstanceAuthController) GroupCancelAuthKeyBatchHandler(ctx *gin.Context) {
+	var groupAuth instance.InstanceGroupUserKeyAuthMulti
+	if err := ctx.ShouldBindJSON(&groupAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	err := groupAuth.MultiGroupCancelAuthKeyService()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.JustSuccess(ctx)
+}
+
+func (auth *UserInstanceAuthController) GetInstanceGroupAuthedKeyHandler(ctx *gin.Context) {
+	var groupAuth instance.InstanceGroupUserKeyAuth
+	if err := ctx.ShouldBindJSON(&groupAuth); err != nil {
+		auth.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	keys, err := groupAuth.GroupAuthedKeyService()
+	if err != nil {
+		auth.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	auth.Success(ctx, keys)
+}

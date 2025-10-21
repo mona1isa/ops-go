@@ -23,5 +23,11 @@ func (*UserInstanceAuthRouter) Setup(r *gin.RouterGroup) {
 		group.POST("/instance/key/auth", userInstanceAuthController.CreateUserInstanceKeyAuthHandler)
 		group.POST("/instance/key/rm", userInstanceAuthController.DeleteUserInstanceKeyAuthHandler)
 		group.POST("/instance/key/list", userInstanceAuthController.GetUserInstanceKeyAuthHandler)
+		group.POST("/instance/key/rm/multi", userInstanceAuthController.MultiKeyAuthCancelHandler)
+		group.POST("/group/available/keys", userInstanceAuthController.GroupAvailableKeyHandler)
+		group.POST("/group/auth/key", userInstanceAuthController.GroupAuthKeyHandler)
+		group.POST("/group/auth/key/cancel", userInstanceAuthController.GroupCancelAuthKeyHandler)
+		group.POST("/group/auth/key/cancel/multi", userInstanceAuthController.GroupCancelAuthKeyBatchHandler)
+		group.POST("/group/auth/key/list", userInstanceAuthController.GetInstanceGroupAuthedKeyHandler)
 	}
 }
