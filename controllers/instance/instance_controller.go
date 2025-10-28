@@ -159,3 +159,20 @@ func (c *InstanceController) TestConnectHandler(ctx *gin.Context) {
 	}
 	c.JustSuccess(ctx)
 }
+
+// GetMyInstanceHandler  获取我的实例
+func (c *InstanceController) GetMyInstanceHandler(ctx *gin.Context) {
+	myInstance := new(instance.MyInstance)
+	if err := ctx.ShouldBindJSON(&myInstance); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	myInstance.IsAdmin = c.IsAdminUser(ctx)
+	result, err := myInstance.GetMyInstance()
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.Success(ctx, result)
+}

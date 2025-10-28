@@ -21,5 +21,7 @@ func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 		instanceGroup.POST("/keys/binding", instanceController.KeyBindingHandler)
 		instanceGroup.POST("/keys/unbinding", instanceController.UnBindingKeyHandler)
 		instanceGroup.POST("/keys/testConnect", instanceController.TestConnectHandler)
+
+		instanceGroup.POST("/myInstance", instanceController.GetMyInstanceHandler)
 	}
 }
