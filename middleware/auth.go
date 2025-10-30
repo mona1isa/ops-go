@@ -30,7 +30,7 @@ var ExcludePaths = [...]string{
 	"/api/captcha/generate",
 	"/api/user/login",
 	"/api/user/logout",
-	"/api/menu/getRoutes",
+	//"/api/menu/getRoutes",
 }
 
 func AuthMiddleware() gin.HandlerFunc {

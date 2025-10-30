@@ -81,7 +81,8 @@ func (my *MyInstance) GetMyInstance() (map[string]any, error) {
 		// 查询与分组绑定的所有主机ID
 		var groupInstanceIds []int
 		if len(groupIds) > 0 {
-			if err := models.DB.Model(&models.OpsInstanceGroup{}).Select("instance_id").Where("group_id IN (?) AND del_flag=0", groupIds).Find(&groupInstanceIds).Error; err != nil {
+			if err := models.DB.Model(&models.OpsInstanceGroup{}).Select("instance_id").Where("group_id IN (?)", groupIds).Find(&groupInstanceIds).Error; err != nil {
+				log.Println("查询分组关联的主机信息失败，Error=", err)
 				return result, errors.New("查询分组关联的主机信息失败")
 			}
 			if len(groupInstanceIds) > 0 {
@@ -92,11 +93,13 @@ func (my *MyInstance) GetMyInstance() (map[string]any, error) {
 		// 分页查询主机信息
 		var pageInstances []*models.OpsInstance
 		if err := models.DB.Where("id IN (?) AND status = ? AND del_flag = ?", authInstanceIds, 1, 0).Offset((my.PageNum - 1) * my.PageSize).Limit(my.PageSize).Find(&pageInstances).Error; err != nil {
+			log.Println("查询主机信息失败，Error=", err)
 			return result, errors.New("查询主机信息失败")
 		}
 		// 查询总数
 		var total int64
 		if err := models.DB.Model(&models.OpsInstance{}).Where("id IN (?) AND status = ? AND del_flag = ?", authInstanceIds, 1, 0).Count(&total).Error; err != nil {
+			log.Println("查询主机信息失败，Error=", err)
 			return result, errors.New("查询主机信息失败")
 		}
 
@@ -104,6 +107,7 @@ func (my *MyInstance) GetMyInstance() (map[string]any, error) {
 		var userInstanceKeyAuths []models.OpsUserInstanceKeyAuth
 		if len(authInstanceIds) > 0 {
 			if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? AND instance_id IN (?) AND del_flag=0", my.UserId, authInstanceIds).Find(&userInstanceKeyAuths).Error; err != nil {
+				log.Println("查询用户-主机关联的凭证失败，Error=", err)
 				return result, errors.New("查询用户-主机关联的凭证失败")
 			}
 
@@ -123,6 +127,7 @@ func (my *MyInstance) GetMyInstance() (map[string]any, error) {
 		var userGroupKeyAuths []models.OpsUserInstanceKeyAuth
 		if len(groupIds) > 0 {
 			if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? AND group_id IN (?) AND del_flag=0", my.UserId, groupIds).Find(&userGroupKeyAuths).Error; err != nil {
+				log.Println("查询用户-分组授权的凭证失败，Error=", err)
 				return result, errors.New("查询用户-分组授权的凭证失败")
 			}
 
@@ -130,6 +135,7 @@ func (my *MyInstance) GetMyInstance() (map[string]any, error) {
 			if len(userGroupKeyAuths) > 0 {
 				var instanceGroups []models.OpsInstanceGroup
 				if err := models.DB.Model(&models.OpsInstanceGroup{}).Select("group_id, instance_id").Where("group_id IN (?) AND del_flag=0", groupIds).Find(&instanceGroups).Error; err != nil {
+					log.Println("查询分组关联的主机信息失败，Error=", err)
 					return result, errors.New("查询分组关联的主机信息失败")
 				}
 

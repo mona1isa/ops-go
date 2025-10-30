@@ -168,6 +168,8 @@ func (c *InstanceController) GetMyInstanceHandler(ctx *gin.Context) {
 		return
 	}
 
+	userId, _ := strconv.Atoi(c.GetUserId(ctx))
+	myInstance.UserId = userId
 	myInstance.IsAdmin = c.IsAdminUser(ctx)
 	result, err := myInstance.GetMyInstance()
 	if err != nil {
