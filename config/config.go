@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	"github.com/zhany/ops-go/bastion"
 	"log"
 	"os"
 	"strconv"
@@ -17,6 +18,7 @@ var (
 func init() {
 	LoadEnv()
 	InitRedis()
+	go bastion.Init()
 }
 
 func LoadEnv() {

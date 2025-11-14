@@ -7,6 +7,7 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.37.0
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.10.1
+	github.com/gliderlabs/ssh v0.3.8
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
@@ -19,6 +20,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/bytedance/sonic v1.13.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
@@ -67,19 +69,14 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/arch v0.18.0 // indirect
 	golang.org/x/image v0.30.0 // indirect
-	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
-	golang.org/x/tools v0.38.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gorm.io/datatypes v1.2.7 // indirect
 	gorm.io/driver/postgres v1.5.9 // indirect
 	gorm.io/driver/sqlserver v1.6.0 // indirect
-	gorm.io/gen v0.3.27 // indirect
-	gorm.io/hints v1.1.2 // indirect
 	gorm.io/plugin/dbresolver v1.6.2 // indirect
 	modernc.org/libc v1.22.2 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
