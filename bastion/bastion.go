@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	gliderssh "github.com/gliderlabs/ssh"
+	"github.com/zhany/ops-go/services/system"
 	sshclient "golang.org/x/crypto/ssh"
 	"io"
 	"log"
@@ -367,17 +368,13 @@ func defaultHosts() []Host {
 	}
 }
 
-// --------- 自定义认证（示例） ---------
-var allowedUsers = map[string]string{
-	"admin": "admin",
-	"ops":   "ops",
-}
-
 func passwordAuth(ctx gliderssh.Context, pass string) bool {
-	user := ctx.User()
-	if p, ok := allowedUsers[user]; ok {
-		return p == pass
+	service := system.UserService{}
+	login, err := service.BastionLogin(ctx.User(), pass)
+	if err != nil {
+		log.Println("passwordAuth error:", err)
+		return false
 	}
-	// 未配置用户时拒绝
-	return false
+	log.Println("PasswordAuth success:", login)
+	return true
 }
