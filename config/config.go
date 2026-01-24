@@ -2,12 +2,11 @@ package config
 
 import (
 	"context"
+	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"os"
 	"strconv"
-
-	"github.com/joho/godotenv"
-	"github.com/redis/go-redis/v9"
 )
 
 var (

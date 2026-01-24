@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
@@ -18,6 +19,29 @@ import (
 )
 
 type UserService struct {
+}
+
+func (u *UserService) BastionLogin(username string, password string) (string, error) {
+	// 验证用户信息
+
+	var user models.SysUser
+	models.DB.First(&user, "user_name=?", username)
+	if user.UserName == "" && user.UserName == username {
+		return "", errors.New("用户不存在")
+	}
+
+	// 用户被禁用后不准登录
+	if strings.EqualFold(user.Status, "0") {
+		return "", errors.New("用户被禁用，请联系管理员")
+	}
+
+	if err := u.CheckHashPassword(password, user.Password); err != nil {
+		log.Println("密码错误：", err)
+		return "", errors.New("密码错误")
+	}
+
+	uid := strings.ReplaceAll(uuid.New().String(), "-", "")
+	return uid, nil
 }
 
 func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {

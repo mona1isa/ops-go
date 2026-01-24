@@ -7,6 +7,11 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	gliderssh "github.com/gliderlabs/ssh"
+	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services/instance"
+	"golang.org/x/crypto/bcrypt"
+	sshclient "golang.org/x/crypto/ssh"
 	"io"
 	"log"
 	"net"
@@ -15,13 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
-
-	gliderssh "github.com/gliderlabs/ssh"
-	"github.com/zhany/ops-go/models"
-	"github.com/zhany/ops-go/services/instance"
-	sshclient "golang.org/x/crypto/ssh"
 )
 
 func Init() {
@@ -523,6 +521,5 @@ func checkPassword(inputPass string, hashedPassword string) bool {
 		log.Println("密码校验失败：", err)
 		return false
 	}
-
 	return true
 }
