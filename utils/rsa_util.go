@@ -173,6 +173,15 @@ func GetPrivateKey() (*rsa.PrivateKey, error) {
 	return ParsePrivateKeyFromPEM(PrivateKey)
 }
 
+// GetPublicKey returns the *rsa.PublicKey from the global PrivateKey string.
+func GetPublicKey() (*rsa.PublicKey, error) {
+	privateKey, err := GetPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	return &privateKey.PublicKey, nil
+}
+
 // ParsePublicKeyFromPEM parses public key from PEM format.
 // ParsePublicKeyFromPEM parses a PEM-encoded public key string and returns an RSA public key.
 // It takes a PEM-encoded string as input and returns the parsed RSA public key or an error.

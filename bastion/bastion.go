@@ -7,17 +7,21 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	gliderssh "github.com/gliderlabs/ssh"
-	sshclient "golang.org/x/crypto/ssh"
 	"io"
 	"log"
-	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
+
+	gliderssh "github.com/gliderlabs/ssh"
+	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services/instance"
+	sshclient "golang.org/x/crypto/ssh"
 )
 
 func Init() {
@@ -80,7 +84,7 @@ func generateHostKeyPEM() []byte {
 
 func interactiveBastion(s gliderssh.Session) {
 	reader := bufio.NewReader(s)
-	store := NewHostStore()
+	store := NewHostStore(s.User())
 
 	printWelcome(s, s.User())
 
@@ -101,16 +105,13 @@ func interactiveBastion(s gliderssh.Session) {
 
 		switch strings.ToUpper(cmd) {
 		case "L":
+			// 显示主机列表（不重新查询数据库）
 			printHosts(s, store.List())
-			fmt.Fprint(s, "\n请输入要连接的主机 ID 或 IP（回车返回菜单）: ")
-			sel, _ := readLineEcho(reader, s)
-			sel = strings.TrimSpace(sel)
-			if sel != "" {
-				connectHostFlow(s, store, sel, reader)
-			}
 		case "R":
+			// 刷新主机列表（重新查询数据库）
 			store.Refresh()
-			fmt.Fprintln(s, " 主机列表已刷新。")
+			fmt.Fprintln(s, "\n主机列表已刷新。")
+			printHosts(s, store.List())
 		case "EXIT":
 			fmt.Fprintln(s, "再见！")
 			return
@@ -122,6 +123,38 @@ func interactiveBastion(s gliderssh.Session) {
 		// 从远端退出后，或命令处理完毕，重新显示欢迎信息和菜单
 		printWelcome(s, s.User())
 	}
+}
+
+// getDisplayWidth 计算字符串在终端中的显示宽度（中文字符算2个字符宽度）
+func getDisplayWidth(s string) int {
+	width := 0
+	for _, r := range s {
+		if r >= 0x4e00 && r <= 0x9fff {
+			// 中文字符范围
+			width += 2
+		} else {
+			width += 1
+		}
+	}
+	return width
+}
+
+// padRightRight 将字符串右侧填充到指定显示宽度（考虑中文字符宽度）
+func padRight(s string, width int) string {
+	displayWidth := getDisplayWidth(s)
+	if displayWidth >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-displayWidth)
+}
+
+// padLeft 将字符串左侧填充到指定显示宽度（考虑中文字符宽度）
+func padLeft(s string, width int) string {
+	displayWidth := getDisplayWidth(s)
+	if displayWidth >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-displayWidth) + s
 }
 
 func printWelcome(s gliderssh.Session, user string) {
@@ -136,10 +169,33 @@ func printWelcome(s gliderssh.Session, user string) {
 }
 
 func printHosts(s gliderssh.Session, hosts []Host) {
-	fmt.Fprintln(s, "\nID   主机名称        规格    状态       IP")
-	fmt.Fprintln(s, "----------------------------------------------")
+	// 列宽设置（显示宽度）
+	idWidth := 5
+	nameWidth := 19
+	specWidth := 11
+	statusWidth := 10
+	ipWidth := 18
+
+	// 打印表头
+	fmt.Fprintln(s, "")
+	fmt.Fprintf(s, " %s | %s | %s | %s | %s\n",
+		padRight("ID", idWidth),
+		padRight("主机名称", nameWidth),
+		padRight("规格", specWidth),
+		padRight("状态", statusWidth),
+		padRight("IP地址", ipWidth))
+	fmt.Fprintln(s, strings.Repeat("-", idWidth)+"+"+strings.Repeat("-", nameWidth)+"+"+
+		strings.Repeat("-", specWidth)+"+"+strings.Repeat("-", statusWidth)+"+"+
+		strings.Repeat("-", ipWidth))
+
+	// 打印主机列表
 	for _, h := range hosts {
-		fmt.Fprintf(s, "%-4d %-14s %-7s %-10s %s\n", h.ID, h.Name, h.Spec, h.Status, h.IP)
+		fmt.Fprintf(s, " %s | %s | %s | %s | %s\n",
+			padLeft(fmt.Sprintf("%d", h.ID), idWidth-1),
+			padRight(h.Name, nameWidth),
+			padRight(h.Spec, specWidth),
+			padRight(h.Status, statusWidth),
+			padRight(h.IP, ipWidth))
 	}
 }
 
@@ -221,21 +277,69 @@ func connectHostFlow(s gliderssh.Session, store *HostStore, sel string, reader *
 	}
 	fmt.Fprintf(s, "\n将连接主机 %s (%s)\n", host.Name, host.IP)
 
-	username := promptEcho(reader, s, "请输入远程主机用户名: ")
-	password := promptSilent(reader, s, "\n请输入远程主机密码: ")
+	// 获取用户有权限的密钥
+	keyAuthService := &instance.UserInstanceKeyAuth{
+		UserId:     store.userID,
+		InstanceId: host.ID,
+		AuthType:   1,
+	}
+	keys, err := keyAuthService.GetUserInstanceKeyAuth()
+	if err != nil {
+		fmt.Fprintf(s, "获取用户密钥失败：%v\n", err)
+		return
+	}
 
-	if err := proxyToRemote(s, host.IP, username, password); err != nil {
+	if len(keys) == 0 {
+		fmt.Fprintln(s, "您没有该主机的登录凭证权限")
+		return
+	}
+
+	// 显示密钥列表
+	fmt.Fprintln(s, "\n请选择登录凭证：")
+	for i, key := range keys {
+		fmt.Fprintf(s, "%d. %s (%s) - %s\n", i+1, key.Name, key.User, key.Protocol)
+	}
+
+	// 让用户选择密钥
+	keyIndexStr := promptEcho(reader, s, "\n请输入凭证序号：")
+	keyIndex, err := strconv.Atoi(keyIndexStr)
+	if err != nil || keyIndex < 1 || keyIndex > len(keys) {
+		fmt.Fprintln(s, "无效的凭证序号")
+		return
+	}
+
+	selectedKey := keys[keyIndex-1]
+	log.Printf("selectedKey: %+v", selectedKey)
+	// 直接使用凭证（数据库中存储的是明文）
+	credentials := selectedKey.Credentials
+
+	// 连接到远程主机
+	if err := proxyToRemote(s, host.IP, selectedKey.User, credentials); err != nil {
 		fmt.Fprintf(s, "\n连接失败：%v\n", err)
 		return
 	}
 	fmt.Fprintln(s, "\n已从远程主机退出，返回堡垒机。")
 }
 
-func proxyToRemote(s gliderssh.Session, ip, user, pass string) error {
+func proxyToRemote(s gliderssh.Session, ip, user, credentials string) error {
 	addr := net.JoinHostPort(ip, "22")
+
+	// 构建认证方法
+	var authMethods []sshclient.AuthMethod
+
+	// 尝试将凭证解析为密钥，失败则作为密码处理
+	key, err := sshclient.ParsePrivateKey([]byte(credentials))
+	if err == nil {
+		// 密钥认证
+		authMethods = append(authMethods, sshclient.PublicKeys(key))
+	} else {
+		// 密码认证
+		authMethods = append(authMethods, sshclient.Password(credentials))
+	}
+
 	cfg := &sshclient.ClientConfig{
 		User:            user,
-		Auth:            []sshclient.AuthMethod{sshclient.Password(pass)},
+		Auth:            authMethods,
 		HostKeyCallback: sshclient.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
@@ -300,7 +404,7 @@ func proxyToRemote(s gliderssh.Session, ip, user, pass string) error {
 	return cs.Wait()
 }
 
-// --------- 简单的主机模型与存储 ---------
+// --------- 主机模型与存储 ---------
 type Host struct {
 	ID     int
 	Name   string
@@ -310,22 +414,61 @@ type Host struct {
 }
 
 type HostStore struct {
-	hosts []Host
+	hosts  []Host
+	userID int
+	user   string
 }
 
-func NewHostStore() *HostStore {
-	return &HostStore{hosts: defaultHosts()}
+func NewHostStore(user string) *HostStore {
+	store := &HostStore{user: user}
+	store.Refresh()
+	return store
 }
 
 func (h *HostStore) Refresh() {
-	for i := range h.hosts {
-		switch rand.Intn(3) {
-		case 0:
-			h.hosts[i].Status = "running"
-		case 1:
-			h.hosts[i].Status = "stopped"
-		default:
-			h.hosts[i].Status = "unknown"
+	// 获取用户信息
+	var sysUser models.SysUser
+	if err := models.DB.Where("user_name = ?", h.user).First(&sysUser).Error; err != nil {
+		log.Printf("获取用户信息失败: %s, 错误: %v", h.user, err)
+		return
+	}
+	h.userID = int(sysUser.ID)
+
+	var instances []models.OpsInstance
+	var err error
+
+	// 判断是否为 admin 用户
+	if h.user == "admin" {
+		// admin 用户查询所有主机
+		if err = models.DB.Where("del_flag = ?", "0").Find(&instances).Error; err != nil {
+			log.Printf("获取所有主机失败: %s, 错误: %v", h.user, err)
+			return
+		}
+	} else {
+		// 普通用户查询有权限的主机和有权限的主机分组中的主机
+		authService := &instance.UserInstanceAuth{UserId: h.userID}
+		instances, err = authService.GetUserInstances()
+		if err != nil {
+			log.Printf("获取用户主机失败: %s, 错误: %v", h.user, err)
+			return
+		}
+	}
+
+	// 转换为Host列表
+	h.hosts = make([]Host, len(instances))
+	for i, instance := range instances {
+		status := "unknown"
+		if instance.Status == "1" {
+			status = "running"
+		} else {
+			status = "stopped"
+		}
+		h.hosts[i] = Host{
+			ID:     int(instance.ID),
+			Name:   instance.Name,
+			Spec:   instance.Spec,
+			Status: status,
+			IP:     instance.Ip,
 		}
 	}
 }
@@ -359,25 +502,27 @@ func (h *HostStore) FindByIP(ip string) *Host {
 	return nil
 }
 
-func defaultHosts() []Host {
-	return []Host{
-		{ID: 1, Name: "web-01", Spec: "2C4G", Status: "running", IP: "47.101.39.88"},
-		{ID: 2, Name: "db-01", Spec: "4C8G", Status: "stopped", IP: "192.168.1.102"},
-		{ID: 3, Name: "cache-01", Spec: "2C2G", Status: "unknown", IP: "192.168.1.103"},
-	}
-}
-
-// --------- 自定义认证（示例） ---------
-var allowedUsers = map[string]string{
-	"admin": "admin",
-	"ops":   "ops",
-}
-
+// --------- 自定义认证 ---------
 func passwordAuth(ctx gliderssh.Context, pass string) bool {
 	user := ctx.User()
-	if p, ok := allowedUsers[user]; ok {
-		return p == pass
+	var sysUser models.SysUser
+	if err := models.DB.Where("user_name = ? AND status = '1'", user).First(&sysUser).Error; err != nil {
+		log.Printf("用户认证失败: %s, 错误: %v", user, err)
+		return false
 	}
-	// 未配置用户时拒绝
-	return false
+	if !checkPassword(pass, sysUser.Password) {
+		log.Printf("用户认证失败: %s, 密码错误", user)
+		return false
+	}
+	return true
+}
+
+func checkPassword(inputPass string, hashedPassword string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(inputPass))
+	if err != nil {
+		log.Println("密码校验失败：", err)
+		return false
+	}
+
+	return true
 }

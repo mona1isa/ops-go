@@ -2,12 +2,12 @@ package config
 
 import (
 	"context"
-	"github.com/joho/godotenv"
-	"github.com/redis/go-redis/v9"
-	"github.com/zhany/ops-go/bastion"
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -18,7 +18,6 @@ var (
 func init() {
 	LoadEnv()
 	InitRedis()
-	go bastion.Init()
 }
 
 func LoadEnv() {

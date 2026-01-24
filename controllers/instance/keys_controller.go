@@ -135,3 +135,16 @@ func (k *KeysController) AvailableKeysBySystemHandler(ctx *gin.Context) {
 	}
 	k.Success(ctx, info)
 }
+
+// GetPublicKeyHandler 获取公钥用于加密凭证
+func (k *KeysController) GetPublicKeyHandler(ctx *gin.Context) {
+	service := instance.KeysService{}
+	publicKey, err := service.GetPublicKey()
+	if err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.Success(ctx, gin.H{
+		"publicKey": publicKey,
+	})
+}

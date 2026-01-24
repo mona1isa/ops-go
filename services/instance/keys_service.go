@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/zhany/ops-go/controllers/instance/api"
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/utils"
 	"gorm.io/gorm"
 	"log"
 	"strings"
@@ -198,4 +199,19 @@ func (s *KeysService) AvailableKeysBySystem(request api.OsTypeRequest) (keys []m
 		return nil, errors.New("查询密钥失败")
 	}
 	return keys, nil
+}
+
+// GetPublicKey 获取公钥用于加密凭证
+func (s *KeysService) GetPublicKey() (string, error) {
+	pubKey, err := utils.GetPublicKey()
+	if err != nil {
+		log.Println("获取公钥失败：", err)
+		return "", errors.New("获取公钥失败")
+	}
+	publicKey, err := utils.ExportPublicKeyToPEM(pubKey)
+	if err != nil {
+		log.Println("导出公钥失败：", err)
+		return "", errors.New("导出公钥失败")
+	}
+	return publicKey, nil
 }
