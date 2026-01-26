@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"golang.org/x/crypto/ssh"
+	"log"
 	"net"
 	"strconv"
 	"time"
@@ -18,11 +19,22 @@ type HostInfo struct {
 
 // TestConnect 测试SSH连通性
 func TestConnect(info *HostInfo) error {
+	// 如果是密码类型，解密凭证
+	credentials := info.Credentials
+	if info.Type == 1 {
+		decrypted, err := DecryptKey(credentials)
+		if err != nil {
+			log.Printf("解密凭证失败: %v", err)
+			return fmt.Errorf("解密凭证失败: %w", err)
+		}
+		credentials = decrypted
+	}
+
 	// 配置 SSH 客户端
 	config := &ssh.ClientConfig{
 		User: info.User,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(info.Credentials),
+			ssh.Password(credentials),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 忽略主机密钥验证（测试用）
 		Timeout:         5 * time.Second,             // 设置连接超时

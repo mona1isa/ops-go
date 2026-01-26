@@ -35,10 +35,21 @@ func (s *KeysService) AddKey(request api.AddKeysRequest) (err error) {
 		return errors.New("密钥名称已存在")
 	}
 
+	// 如果是密码类型，则加密存储
+	credentials := request.Credentials
+	if request.Type == 1 {
+		encrypted, err := utils.EncryptPassword(credentials)
+		if err != nil {
+			log.Println("加密密码失败：", err)
+			return errors.New("加密密码失败")
+		}
+		credentials = encrypted
+	}
+
 	key := models.OpsKey{
 		Name:        name,
 		User:        request.User,
-		Credentials: request.Credentials,
+		Credentials: credentials,
 		Status:      request.Status,
 		Protocol:    request.Protocol,
 		Port:        request.Port,
@@ -77,13 +88,25 @@ func (s *KeysService) EditKey(request api.UpdateKeysRequest) (err error) {
 	// 更新密钥信息s
 	key.Name = name
 	key.User = request.User
-	key.Credentials = request.Credentials
 	key.Status = request.Status
 	key.Protocol = request.Protocol
 	key.Port = request.Port
 	key.Type = request.Type
 	key.UpdateBy = request.UpdateBy
 	key.Remark = request.Remark
+
+	// 如果是密码类型且凭证有变化，则加密存储
+	if request.Type == 1 && request.Credentials != "" {
+		encrypted, err := utils.EncryptPassword(request.Credentials)
+		if err != nil {
+			log.Println("加密密码失败：", err)
+			return errors.New("加密密码失败")
+		}
+		key.Credentials = encrypted
+	} else if request.Credentials != "" {
+		// 密钥类型，直接存储
+		key.Credentials = request.Credentials
+	}
 
 	if err := models.DB.Save(&key).Error; err != nil {
 		log.Println("编辑密钥失败：", err)

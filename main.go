@@ -10,8 +10,6 @@ import (
 func main() {
 	// 启动堡垒机服务
 	go bastion.Init()
-	// 启动堡垒机
-	go bastion.Init()
 	// 启动Web服务
 	r := routers.Init()
 	err := r.Run(":" + os.Getenv("APP_PORT"))

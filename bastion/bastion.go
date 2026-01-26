@@ -10,6 +10,7 @@ import (
 	gliderssh "github.com/gliderlabs/ssh"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services/instance"
+	"github.com/zhany/ops-go/utils"
 	"golang.org/x/crypto/bcrypt"
 	sshclient "golang.org/x/crypto/ssh"
 	"io"
@@ -308,8 +309,18 @@ func connectHostFlow(s gliderssh.Session, store *HostStore, sel string, reader *
 
 	selectedKey := keys[keyIndex-1]
 	log.Printf("selectedKey: %+v", selectedKey)
-	// 直接使用凭证（数据库中存储的是明文）
+	// 获取明文凭证（如果是加密的密码则解密）
 	credentials := selectedKey.Credentials
+	if selectedKey.Type == 1 {
+		// 密码类型，需要解密
+		decrypted, err := utils.DecryptKey(credentials)
+		if err != nil {
+			log.Printf("解密凭证失败: %v", err)
+			fmt.Fprintln(s, "解密凭证失败")
+			return
+		}
+		credentials = decrypted
+	}
 
 	// 连接到远程主机
 	if err := proxyToRemote(s, host.IP, selectedKey.User, credentials); err != nil {

@@ -218,6 +218,16 @@ func ParsePublicKeyFromPEM(pemData string) (*rsa.PublicKey, error) {
 
 // DecryptKey 解密登录凭证
 func DecryptKey(encryptedKey string) (key string, err error) {
+	// 如果是空字符串，直接返回
+	if encryptedKey == "" {
+		return "", nil
+	}
+	// 判断是否是Base64编码的加密数据
+	if _, err := base64.StdEncoding.DecodeString(encryptedKey); err != nil {
+		// 不是Base64编码，说明已经是明文，直接返回
+		return encryptedKey, nil
+	}
+	// 解密
 	privateKey, err := ParsePrivateKeyFromPEM(PrivateKey)
 	if err != nil {
 		log.Println("解析私钥失败：", err)
@@ -234,4 +244,22 @@ func DecryptKey(encryptedKey string) (key string, err error) {
 		return "", errors.New("登录凭证解密失败")
 	}
 	return string(credentials), nil
+}
+
+// EncryptPassword 加密密码
+func EncryptPassword(password string) (encrypted string, err error) {
+	if password == "" {
+		return "", nil
+	}
+	publicKey, err := GetPublicKey()
+	if err != nil {
+		log.Println("获取公钥失败：", err)
+		return "", errors.New("获取公钥失败")
+	}
+	encryptedBytes, err := Encrypt(publicKey, []byte(password))
+	if err != nil {
+		log.Println("加密失败：", err)
+		return "", errors.New("加密失败")
+	}
+	return base64.StdEncoding.EncodeToString(encryptedBytes), nil
 }
