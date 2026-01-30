@@ -85,7 +85,7 @@ func interactiveBastion(s gliderssh.Session) {
 	reader := bufio.NewReader(s)
 	store := NewHostStore(s.User())
 
-	printWelcome(s, s.User())
+	// printWelcome(s, s.User())
 
 	for {
 		fmt.Fprint(s, "\nConsole> ")
@@ -111,6 +111,9 @@ func interactiveBastion(s gliderssh.Session) {
 			store.Refresh()
 			fmt.Fprintln(s, "\n主机列表已刷新。")
 			printHosts(s, store.List())
+		case "C":
+			// 清除屏幕
+			fmt.Fprint(s, "\033[2J\033[H")
 		case "EXIT":
 			fmt.Fprintln(s, "再见！")
 			return
@@ -163,6 +166,7 @@ func printWelcome(s gliderssh.Session, user string) {
 	fmt.Fprintln(s, " - 输入 R 刷新主机列表")
 	fmt.Fprintln(s, " - 输入主机 ID, 名称或 IP 登录主机")
 	fmt.Fprintln(s, " - 输入 H 显示帮助信息")
+	fmt.Fprintln(s, " - 输入 C 清除当前屏幕")
 	fmt.Fprintln(s, " - 输入 exit 退出堡垒机")
 	fmt.Fprintln(s, "----------------------------------------------")
 }
@@ -183,14 +187,14 @@ func printHosts(s gliderssh.Session, hosts []Host) {
 		padRight("规格", specWidth),
 		padRight("状态", statusWidth),
 		padRight("IP地址", ipWidth))
-	fmt.Fprintln(s, strings.Repeat("-", idWidth)+"+"+strings.Repeat("-", nameWidth)+"+"+
-		strings.Repeat("-", specWidth)+"+"+strings.Repeat("-", statusWidth)+"+"+
-		strings.Repeat("-", ipWidth))
+	fmt.Fprintln(s, " "+strings.Repeat("-", idWidth+1)+"+"+strings.Repeat("-", nameWidth+2)+"+"+
+		strings.Repeat("-", specWidth+2)+"+"+strings.Repeat("-", statusWidth+2)+"+"+
+		strings.Repeat("-", ipWidth+1))
 
 	// 打印主机列表
 	for _, h := range hosts {
 		fmt.Fprintf(s, " %s | %s | %s | %s | %s\n",
-			padLeft(fmt.Sprintf("%d", h.ID), idWidth-1),
+			padRight(fmt.Sprintf("%d", h.ID), idWidth),
 			padRight(h.Name, nameWidth),
 			padRight(h.Spec, specWidth),
 			padRight(h.Status, statusWidth),
