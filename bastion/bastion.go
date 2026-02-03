@@ -7,12 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	gliderssh "github.com/gliderlabs/ssh"
-	"github.com/zhany/ops-go/models"
-	"github.com/zhany/ops-go/services/instance"
-	"github.com/zhany/ops-go/utils"
-	"golang.org/x/crypto/bcrypt"
-	sshclient "golang.org/x/crypto/ssh"
 	"io"
 	"log"
 	"net"
@@ -21,6 +15,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	gliderssh "github.com/gliderlabs/ssh"
+	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services/instance"
+	"github.com/zhany/ops-go/utils"
+	"golang.org/x/crypto/bcrypt"
+	sshclient "golang.org/x/crypto/ssh"
 )
 
 func Init() {
@@ -114,6 +115,9 @@ func interactiveBastion(s gliderssh.Session) {
 		case "C":
 			// 清除屏幕
 			fmt.Fprint(s, "\033[2J\033[H")
+		case "H":
+			// 显示菜单帮助信息
+			printWelcome(s, s.User())
 		case "EXIT":
 			fmt.Fprintln(s, "再见！")
 			return
@@ -123,7 +127,7 @@ func interactiveBastion(s gliderssh.Session) {
 		}
 
 		// 从远端退出后，或命令处理完毕，重新显示欢迎信息和菜单
-		printWelcome(s, s.User())
+		// printWelcome(s, s.User())
 	}
 }
 
