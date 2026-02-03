@@ -10,6 +10,7 @@ type InstanceRouter struct {
 
 func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 	instanceController := instance.InstanceController{}
+	wsController := instance.WebSocketController{}
 	instanceGroup := r.Group("/instance")
 	{
 		instanceGroup.POST("/add", instanceController.AddInstanceHandler)
@@ -23,5 +24,8 @@ func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 		instanceGroup.POST("/keys/testConnect", instanceController.TestConnectHandler)
 
 		instanceGroup.POST("/myInstance", instanceController.GetMyInstanceHandler)
+
+		// WebSocket终端连接接口
+		instanceGroup.GET("/terminal", wsController.WebSocketHandler)
 	}
 }

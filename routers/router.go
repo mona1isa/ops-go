@@ -8,8 +8,8 @@ import (
 func Init() *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CorsMiddleware())
-	r.Use(middleware.AuthMiddleware())
 	r.Use(middleware.LogMiddleware())
+	r.Use(middleware.AuthMiddleware())
 	r.Use(middleware.CasbinMiddleware())
 
 	api := r.Group("/api")

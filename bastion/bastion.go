@@ -85,7 +85,7 @@ func interactiveBastion(s gliderssh.Session) {
 	reader := bufio.NewReader(s)
 	store := NewHostStore(s.User())
 
-	// printWelcome(s, s.User())
+	printWelcome(s, s.User())
 
 	for {
 		fmt.Fprint(s, "\nConsole> ")

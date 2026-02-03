@@ -30,6 +30,7 @@ var ExcludePaths = [...]string{
 	"/api/captcha/generate",
 	"/api/user/login",
 	"/api/user/logout",
+	"/api/instance/terminal",
 	//"/api/menu/getRoutes",
 }
 
