@@ -77,8 +77,11 @@ func (r *RoleService) Edit(request *api.EditRoleRequest) error {
 		log.Println("编辑角色失败：", err.Error())
 		return errors.New("编辑角色失败：" + err.Error())
 	}
-	// 保存角色菜单
-	_ = saveRoleMenu(request.MenuIds, id)
+	// 保存角色菜单（包括 Casbin 同步）
+	if err := saveRoleMenu(request.MenuIds, id); err != nil {
+		log.Println("保存角色菜单失败：", err.Error())
+		return errors.New("保存角色菜单失败：" + err.Error())
+	}
 	return nil
 }
 
@@ -121,17 +124,28 @@ func (r *RoleService) Page(roleRequest *api.PageRoleRequest) (models.PageResult[
 
 // Remove 删除角色
 func (r *RoleService) Remove(id int) error {
-	if err := models.DB.Delete(&models.SysRole{}, id).Error; err != nil {
-		return errors.New("角色删除失败: " + err.Error())
-	}
-	// 删除角色菜单
-	if err := models.DB.Where("role_id = ?", id).Delete(&models.SysRoleMenu{}).Error; err != nil {
-		return errors.New("删除角色菜单失败: " + err.Error())
-	}
-	// 删除 Casbin 权限
-	_, err := models.Casbin.DeleteRolePolicy(id)
-	if err != nil {
-		log.Println("删除Casbin 策略失败：", err.Error())
+	if err := models.DB.Transaction(func(tx *gorm.DB) error {
+		// 删除角色
+		if err := tx.Delete(&models.SysRole{}, id).Error; err != nil {
+			return errors.New("角色删除失败: " + err.Error())
+		}
+		// 删除角色菜单
+		if err := tx.Where("role_id = ?", id).Delete(&models.SysRoleMenu{}).Error; err != nil {
+			return errors.New("删除角色菜单失败: " + err.Error())
+		}
+		// 删除角色用户关联
+		if err := tx.Where("role_id = ?", id).Delete(&models.SysUserRole{}).Error; err != nil {
+			return errors.New("删除角色用户关联失败: " + err.Error())
+		}
+		// 删除 Casbin 权限
+		_, err := models.Casbin.DeleteRoleById(id)
+		if err != nil {
+			log.Printf("删除Casbin 策略失败：%v\n", err)
+			return errors.New("删除Casbin 策略失败: " + err.Error())
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -281,18 +295,24 @@ func saveCasbinPolicy(roleId int, menus []models.SysMenu) error {
 	// 删除旧的角色策略
 	_, err := models.Casbin.DeleteRolePolicy(roleId)
 	if err != nil {
-		log.Fatalln("删除旧的角色策略失败：", err.Error())
+		log.Printf("删除旧的角色策略失败：%v\n", err)
+		return err
 	}
-	// 添加新的角色策略
+	// 添加新的角色策略 - 使用批量操作
+	policies := make([][]string, 0)
 	for _, menu := range menus {
 		url := menu.RequestUrl
 		method := menu.RequestMethod
 		if url != "" && method != "" {
-			_, err := models.Casbin.AddPolicy(roleId, url, method)
-			if err != nil {
-				log.Fatalln("添加策略失败：", err.Error())
-				return err
-			}
+			roleName := models.Casbin.MakeRoleName(roleId)
+			policies = append(policies, []string{roleName, url, method})
+		}
+	}
+	if len(policies) > 0 {
+		_, err := models.Casbin.AddPolicies(policies)
+		if err != nil {
+			log.Printf("添加策略失败：%v\n", err)
+			return err
 		}
 	}
 

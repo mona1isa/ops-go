@@ -59,11 +59,16 @@ func (u *SysUser) AfterCreate(db *gorm.DB) error {
 
 // BeforeUpdate 更新用户前先删除用户角色然后再创建并同步Casbin
 func (u *SysUser) BeforeUpdate(db *gorm.DB) error {
+	// 只有当 RoleIds 字段在更新中存在时才同步角色
+	if !db.Statement.Changed("RoleIds") && len(u.RoleIds) == 0 {
+		return nil
+	}
+
 	// 清除Casbin用户和角色关联
 	_, err := Casbin.DeleteUserRole(u.UserName)
 	if err != nil {
-		err = fmt.Errorf("casbin删除用户角色失败：%v", err)
-		return err
+		log.Printf("casbin删除用户角色失败：%v\n", err)
+		// 不返回错误，允许继续执行
 	}
 	// 删除sys_user_role 中用户角色
 	if err = u.deleteUserRole(); err != nil {

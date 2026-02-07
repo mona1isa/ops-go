@@ -5,6 +5,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"sync"
+	"time"
 )
 
 var (
@@ -26,14 +27,18 @@ func (c *CasbinHandler) init() {
 		if err != nil {
 			panic(err)
 		}
+		// 配置自动刷新策略间隔（30秒）
+		c.enforcer.StartAutoLoadPolicy(30 * time.Second)
+		// 启用自动保存策略
+		c.enforcer.EnableAutoSave(true)
+		// 仅在开发环境启用日志
+		// c.enforcer.EnableLog(true)
+		// 加载策略
+		err = c.enforcer.LoadPolicy()
+		if err != nil {
+			panic(fmt.Sprintf("Failed to load policy: %v", err))
+		}
 	})
-
-	c.enforcer.EnableAutoSave(true)
-	c.enforcer.EnableLog(true)
-	err := c.enforcer.LoadPolicy()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to load policy: %v", err))
-	}
 }
 
 // Enforcer Casbin权限验证

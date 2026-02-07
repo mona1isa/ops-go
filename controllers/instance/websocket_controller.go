@@ -206,6 +206,15 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		return errors.New("主机不存在")
 	}
 
+	// 检查主机状态
+	if instance.Status != "1" {
+		statusText := "stopped"
+		if instance.Status == "" {
+			statusText = "unknown"
+		}
+		return fmt.Errorf("主机 %s (%s) 当前状态：%s，无法访问", instance.Name, instance.Ip, statusText)
+	}
+
 	// 获取明文凭证
 	var credentials string
 	var err error

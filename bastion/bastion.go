@@ -282,6 +282,14 @@ func connectHostFlow(s gliderssh.Session, store *HostStore, sel string, reader *
 		fmt.Fprintf(s, "未找到主机：%s\n", sel)
 		return
 	}
+
+	// 检查主机状态
+	if host.Status != "running" {
+		fmt.Fprintf(s, "主机 %s (%s) 当前状态：%s\n", host.Name, host.IP, host.Status)
+		fmt.Fprintln(s, "主机未处于运行状态，无法访问")
+		return
+	}
+
 	fmt.Fprintf(s, "\n将连接主机 %s (%s)\n", host.Name, host.IP)
 
 	// 获取用户有权限的密钥
