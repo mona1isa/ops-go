@@ -23,6 +23,7 @@ func Init() *gin.Engine {
 	keysRouter := KeysRouter{}
 	groupRouter := GroupRouter{}
 	userInstanceAuthRouter := UserInstanceAuthRouter{}
+	sessionRecordRouter := &SessionRecordRouter{}
 
 	userRouter.Setup(api)
 	captchaRouter.Setup(api)
@@ -34,5 +35,6 @@ func Init() *gin.Engine {
 	keysRouter.Setup(api)
 	groupRouter.Setup(api)
 	userInstanceAuthRouter.Setup(api)
+	sessionRecordRouter.Setup(api)
 	return r
 }

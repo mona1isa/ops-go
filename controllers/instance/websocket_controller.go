@@ -26,14 +26,16 @@ type WebSocketController struct {
 
 // SSHSession 管理SSH会话
 type SSHSession struct {
-	Conn       *ssh.Client
-	Session    *ssh.Session
-	StdoutPipe io.Reader
-	StdinPipe  io.WriteCloser
-	InstanceId int
-	UserId     int
-	KeyId      int
-	mu         sync.Mutex
+	Conn          *ssh.Client
+	Session       *ssh.Session
+	StdoutPipe    io.Reader
+	StdinPipe     io.WriteCloser
+	InstanceId    int
+	UserId        int
+	KeyId         int
+	Recorder      *utils.SessionRecorder // 会话录制器
+	SessionRecord *models.OpsSessionRecord // 会话记录
+	mu            sync.Mutex
 }
 
 // 存储活跃的SSH会话，使用连接ID作为key
@@ -215,6 +217,23 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		return fmt.Errorf("主机 %s (%s) 当前状态：%s，无法访问", instance.Name, instance.Ip, statusText)
 	}
 
+	// 创建会话记录
+	sessionRecord := &models.OpsSessionRecord{
+		SessionID:    sessionID,
+		UserID:       userId,
+		InstanceID:   instanceId,
+		InstanceName: instance.Name,
+		InstanceIP:   instance.Ip,
+		KeyID:        int(key.ID),
+		KeyName:      key.Name,
+		KeyUser:      key.User,
+		StartTime:    time.Now(),
+		Status:       models.SessionStatusActive,
+	}
+	if err := models.DB.Create(sessionRecord).Error; err != nil {
+		log.Printf("创建会话记录失败: %v", err)
+	}
+
 	// 获取明文凭证
 	var credentials string
 	var err error
@@ -281,27 +300,38 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		return errors.New("获取标准输入失败: " + err.Error())
 	}
 
-	// 请求伪终端
+	// 请求伪终端（默认大小 80x24）
+	rows := 24
+	cols := 80
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
 	}
-	if err := session.RequestPty("xterm-256color", 24, 80, modes); err != nil {
+	if err := session.RequestPty("xterm-256color", rows, cols, modes); err != nil {
 		session.Close()
 		sshConn.Close()
 		return errors.New("请求伪终端失败: " + err.Error())
 	}
 
+	// 创建会话录制器（存储路径从配置读取，这里先硬编码）
+	recorder, err := utils.NewSessionRecorder(sessionID, cols, rows, "./recordings")
+	if err != nil {
+		log.Printf("创建会话录制器失败: %v", err)
+		// 录制失败不影响连接，继续执行
+	}
+
 	// 保存会话
 	sshSession := &SSHSession{
-		Conn:       sshConn,
-		Session:    session,
-		StdoutPipe: stdoutPipe,
-		StdinPipe:  stdinPipe,
-		InstanceId: instanceId,
-		UserId:     userId,
-		KeyId:      key.ID,
+		Conn:          sshConn,
+		Session:       session,
+		StdoutPipe:    stdoutPipe,
+		StdinPipe:     stdinPipe,
+		InstanceId:    instanceId,
+		UserId:        userId,
+		KeyId:         int(key.ID),
+		Recorder:      recorder,
+		SessionRecord: sessionRecord,
 	}
 
 	sessionMutex.Lock()
@@ -312,6 +342,9 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 	if err := session.Shell(); err != nil {
 		session.Close()
 		sshConn.Close()
+		if recorder != nil {
+			recorder.Close()
+		}
 		sessionMutex.Lock()
 		delete(activeSessions, sessionID)
 		sessionMutex.Unlock()
@@ -343,9 +376,19 @@ func (c *WebSocketController) readSSHOutput(conn *websocket.Conn, sessionID stri
 			return
 		}
 		if n > 0 {
+			data := string(buf[:n])
+			
+			// 录制输出数据
+			if sshSession.Recorder != nil {
+				if err := sshSession.Recorder.RecordOutput(data); err != nil {
+					log.Printf("录制输出数据失败: %v", err)
+				}
+			}
+
+			// 发送到 WebSocket
 			if err := conn.WriteJSON(WebSocketMessage{
 				Type: "data",
-				Data: string(buf[:n]),
+				Data: data,
 			}); err != nil {
 				log.Printf("发送WebSocket数据失败: %v", err)
 				return
@@ -367,6 +410,12 @@ func (c *WebSocketController) handleResize(sessionID string, msg WebSocketMessag
 	sshSession.mu.Lock()
 	defer sshSession.mu.Unlock()
 
+	// 更新录制器的终端大小
+	if sshSession.Recorder != nil {
+		sshSession.Recorder.Resize(msg.Cols, msg.Rows)
+	}
+
+	// 更新 SSH 会话的终端大小
 	if err := sshSession.Session.WindowChange(msg.Rows, msg.Cols); err != nil {
 		log.Printf("调整终端大小失败: %v", err)
 	}
@@ -385,6 +434,11 @@ func (c *WebSocketController) handleData(sessionID string, msg WebSocketMessage)
 	sshSession.mu.Lock()
 	defer sshSession.mu.Unlock()
 
+	// 注意：不记录输入数据，因为终端会自动回显用户输入
+	// SSH 服务器会将用户输入作为输出返回，我们在 readSSHOutput 中统一记录输出
+	// 这样可以避免重复记录（用户输入一次 + 回显一次 = 显示两次）
+
+	// 写入SSH输入
 	if _, err := sshSession.StdinPipe.Write([]byte(msg.Data)); err != nil {
 		log.Printf("写入SSH输入失败: %v", err)
 	}
@@ -397,6 +451,31 @@ func (c *WebSocketController) handleClose(sessionID string) {
 
 	if sshSession, ok := activeSessions[sessionID]; ok {
 		sshSession.mu.Lock()
+		defer sshSession.mu.Unlock()
+
+		// 关闭录制器
+		if sshSession.Recorder != nil {
+			if err := sshSession.Recorder.Close(); err != nil {
+				log.Printf("关闭录制器失败: %v", err)
+			}
+			// 更新会话记录
+			if sshSession.SessionRecord != nil {
+				fileSize, _ := sshSession.Recorder.GetFileSize()
+				duration := sshSession.Recorder.GetDuration()
+				endTime := time.Now()
+				updates := map[string]interface{}{
+					"end_time":       &endTime,
+					"duration":       duration,
+					"status":         models.SessionStatusCompleted,
+					"recording_file": sshSession.Recorder.GetFilePath(),
+					"file_size":      fileSize,
+				}
+				models.DB.Model(&models.OpsSessionRecord{}).
+					Where("session_id = ?", sessionID).
+					Updates(updates)
+			}
+		}
+
 		// 关闭标准输入管道
 		if sshSession.StdinPipe != nil {
 			sshSession.StdinPipe.Close()
@@ -409,7 +488,7 @@ func (c *WebSocketController) handleClose(sessionID string) {
 		if sshSession.Conn != nil {
 			sshSession.Conn.Close()
 		}
-		sshSession.mu.Unlock()
+
 		delete(activeSessions, sessionID)
 	}
 }
