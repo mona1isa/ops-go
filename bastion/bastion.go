@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	gliderssh "github.com/gliderlabs/ssh"
@@ -24,7 +25,148 @@ import (
 	sshclient "golang.org/x/crypto/ssh"
 )
 
+// SessionManager 会话管理器
+type SessionManager struct {
+	sessions map[string]*ActiveSession
+	mu       sync.RWMutex
+}
+
+// ActiveSession 活跃会话
+type ActiveSession struct {
+	SessionID   string
+	UserID      int
+	UserName    string
+	InstanceID  int
+	InstanceIP  string
+	Conn        *sshclient.Client
+	Session     *sshclient.Session
+	SSHSession  gliderssh.Session
+	StartTime   time.Time
+}
+
+var globalSessionManager = &SessionManager{
+	sessions: make(map[string]*ActiveSession),
+}
+
+// GetGlobalSessionManager 获取全局会话管理器（导出给外部使用）
+func GetGlobalSessionManager() *SessionManager {
+	return globalSessionManager
+}
+
+// GetSessionManager 获取全局会话管理器
+func GetSessionManager() *SessionManager {
+	return globalSessionManager
+}
+
+// AddSession 添加活跃会话
+func (sm *SessionManager) AddSession(sessionID string, session *ActiveSession) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.sessions[sessionID] = session
+	log.Printf("会话已添加到管理器: %s", sessionID)
+}
+
+// RemoveSession 移除会话
+func (sm *SessionManager) RemoveSession(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	delete(sm.sessions, sessionID)
+	log.Printf("会话已从管理器移除: %s", sessionID)
+}
+
+// GetSession 获取会话
+func (sm *SessionManager) GetSession(sessionID string) *ActiveSession {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.sessions[sessionID]
+}
+
+// ListSessions 列出所有活跃会话
+func (sm *SessionManager) ListSessions() []*ActiveSession {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	sessions := make([]*ActiveSession, 0, len(sm.sessions))
+	for _, s := range sm.sessions {
+		sessions = append(sessions, s)
+	}
+	return sessions
+}
+
+// TerminateSession 终止会话
+func (sm *SessionManager) TerminateSession(sessionID string) error {
+	sm.mu.RLock()
+	session, exists := sm.sessions[sessionID]
+	sm.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("会话不存在")
+	}
+
+	// 向用户发送终止消息
+	if session.SSHSession != nil {
+		message := "\r\n\r\n========================================\r\n"
+		message += "⚠️  警告：会话已被管理员终止\r\n"
+		message += "========================================\r\n"
+		message += "原因：管理员强制结束该会话\r\n"
+		message += "时间：" + time.Now().Format("2006-01-02 15:04:05") + "\r\n"
+		message += "========================================\r\n"
+		message += "\r\n无法继续执行远程操作，连接即将关闭...\r\n\r\n"
+		fmt.Fprintf(session.SSHSession, "%s", message)
+		// 给用户一点时间看到消息
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// 先关闭 SSH 会话，停止远端命令执行
+	if session.Session != nil {
+		_ = session.Session.Close()
+	}
+
+	// 关闭 SSH 连接
+	if session.Conn != nil {
+		_ = session.Conn.Close()
+	}
+
+	// 关闭 gliderssh 会话，断开客户端连接
+	if session.SSHSession != nil {
+		_ = session.SSHSession.Close()
+	}
+
+	// 更新数据库记录状态
+	now := time.Now()
+	duration := int(now.Sub(session.StartTime).Seconds())
+
+	// 获取当前文件大小
+	var fileSize int64
+	if record, err := (&instance.SessionRecordService{}).GetBySessionID(sessionID); err == nil && record.RecordingFile != "" {
+		if info, err := os.Stat(record.RecordingFile); err == nil {
+			fileSize = info.Size()
+		}
+	}
+
+	models.DB.Model(&models.OpsSessionRecord{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"end_time":       &now,
+			"duration":       duration,
+			"status":         models.SessionStatusAborted,
+			"recording_file": fmt.Sprintf("recordings/%s/%s.cast", now.Format("2006-01-02"), sessionID),
+			"file_size":      fileSize,
+		})
+
+	log.Printf("会话已终止: %s", sessionID)
+
+	return nil
+}
+
+// Terminate 实现 instance.SessionTerminator 接口
+func (sm *SessionManager) Terminate(sessionID string) error {
+	return sm.TerminateSession(sessionID)
+}
+
 func Init() {
+	// 注册会话终止器，让 Service 层可以调用 Bastion 的终止功能
+	instance.RegisterTerminator(globalSessionManager)
+
 	pem := loadOrCreateHostKeyPEM(filepath.Join("cmd", "bastion", "hostkey.pem"))
 
 	gliderssh.Handle(sessionHandler)
@@ -339,43 +481,93 @@ func connectHostFlow(s gliderssh.Session, store *HostStore, sel string, reader *
 	}
 
 	// 连接到远程主机
-	if err := proxyToRemote(s, host.IP, selectedKey.User, credentials); err != nil {
+	if err := proxyToRemote(s, host, selectedKey, credentials, keyAuthService.UserId); err != nil {
 		fmt.Fprintf(s, "\n连接失败：%v\n", err)
 		return
 	}
 	fmt.Fprintln(s, "\n已从远程主机退出，返回堡垒机。")
 }
 
-func proxyToRemote(s gliderssh.Session, ip, user, credentials string) error {
-	addr := net.JoinHostPort(ip, "22")
+func proxyToRemote(s gliderssh.Session, host *Host, key models.OpsKey, credentials string, userId int) error {
+	// 生成会话ID
+	sessionID := generateSessionID(s.User(), host.ID)
+
+	// 创建会话记录
+	record := &models.OpsSessionRecord{
+		SessionID:     sessionID,
+		UserID:        userId,
+		InstanceID:    host.ID,
+		InstanceName:  host.Name,
+		InstanceIP:    host.IP,
+		KeyID:         key.ID,
+		KeyName:       key.Name,
+		KeyUser:       key.User,
+		StartTime:     time.Now(),
+		Status:        models.SessionStatusActive,
+	}
+	if err := models.DB.Create(record).Error; err != nil {
+		log.Printf("创建会话记录失败: %v", err)
+		// 即使创建记录失败，也继续连接
+	}
+
+	// 获取终端尺寸
+	var width, height int
+	if pty, _, ok := s.Pty(); ok {
+		width = pty.Window.Width
+		height = pty.Window.Height
+		// 兜底尺寸
+		if width <= 0 {
+			width = 80
+		}
+		if height <= 0 {
+			height = 24
+		}
+	}
+
+	// 创建会话录制器
+	recorder, err := utils.NewSessionRecorder(sessionID, width, height, "recordings")
+	if err != nil {
+		log.Printf("创建录制器失败: %v", err)
+		// 即使录制失败，也继续连接
+		recorder = nil
+	}
+	if recorder != nil {
+		defer recorder.Close()
+	}
+
+	addr := net.JoinHostPort(host.IP, "22")
 
 	// 构建认证方法
 	var authMethods []sshclient.AuthMethod
 
 	// 尝试将凭证解析为密钥，失败则作为密码处理
-	key, err := sshclient.ParsePrivateKey([]byte(credentials))
+	sshKey, err := sshclient.ParsePrivateKey([]byte(credentials))
 	if err == nil {
 		// 密钥认证
-		authMethods = append(authMethods, sshclient.PublicKeys(key))
+		authMethods = append(authMethods, sshclient.PublicKeys(sshKey))
 	} else {
 		// 密码认证
 		authMethods = append(authMethods, sshclient.Password(credentials))
 	}
 
 	cfg := &sshclient.ClientConfig{
-		User:            user,
+		User:            key.User,
 		Auth:            authMethods,
 		HostKeyCallback: sshclient.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
 	conn, err := sshclient.Dial("tcp", addr, cfg)
 	if err != nil {
+		// 更新会话记录状态为异常中断
+		updateSessionRecordStatus(sessionID, models.SessionStatusAborted, 0)
 		return err
 	}
 	defer conn.Close()
 
 	cs, err := conn.NewSession()
 	if err != nil {
+		// 更新会话记录状态为异常中断
+		updateSessionRecordStatus(sessionID, models.SessionStatusAborted, 0)
 		return err
 	}
 	defer cs.Close()
@@ -390,15 +582,7 @@ func proxyToRemote(s gliderssh.Session, ip, user, credentials string) error {
 		if term == "" {
 			term = "xterm-256color"
 		}
-		width := pty.Window.Width
-		height := pty.Window.Height
-		// 兜底尺寸，防止初始宽高为0导致过度换行
-		if width <= 0 {
-			width = 80
-		}
-		if height <= 0 {
-			height = 24
-		}
+
 		// 远端请求与本地相同大小的终端（注意参数顺序：height, width）
 		_ = cs.RequestPty(term, height, width, modes)
 		// 监听窗口大小变化并同步到远端会话
@@ -414,19 +598,141 @@ func proxyToRemote(s gliderssh.Session, ip, user, credentials string) error {
 				}
 				// 注意参数顺序：height, width
 				_ = cs.WindowChange(h, w)
+				// 同时更新录制器的终端尺寸
+				if recorder != nil {
+					recorder.Resize(w, h)
+				}
 			}
 		}()
 	}
 
-	cs.Stdout = s
-	cs.Stderr = s
-	cs.Stdin = s
+	// 创建双向数据流，并记录会话
+	stdin := newRecordingReader(s, recorder, false)
+	stdout := newRecordingWriter(s, recorder, true)
+	stderr := newRecordingWriter(s, recorder, true)
+
+	cs.Stdin = stdin
+	cs.Stdout = stdout
+	cs.Stderr = stderr
 
 	// 启动远端 shell 并阻塞到退出
 	if err := cs.Shell(); err != nil {
+		// 更新会话记录状态为异常中断
+		updateSessionRecordStatus(sessionID, models.SessionStatusAborted, 0)
 		return err
 	}
-	return cs.Wait()
+
+	// 添加到会话管理器
+	activeSession := &ActiveSession{
+		SessionID:  sessionID,
+		UserID:     userId,
+		UserName:   s.User(),
+		InstanceID: host.ID,
+		InstanceIP: host.IP,
+		Conn:       conn,
+		Session:    cs,
+		SSHSession: s,
+		StartTime:  record.StartTime,
+	}
+	globalSessionManager.AddSession(sessionID, activeSession)
+	defer globalSessionManager.RemoveSession(sessionID)
+
+	err = cs.Wait()
+
+	// 会话结束，更新记录
+	endTime := time.Now()
+	duration := int(endTime.Sub(record.StartTime).Seconds())
+
+	status := models.SessionStatusCompleted
+	if err != nil {
+		status = models.SessionStatusAborted
+	}
+
+	var fileSize int64
+	if recorder != nil {
+		if size, err := recorder.GetFileSize(); err == nil {
+			fileSize = size
+		}
+	}
+
+	updateSessionRecord(sessionID, endTime, duration, status, fileSize)
+
+	return err
+}
+
+// generateSessionID 生成会话ID
+func generateSessionID(user string, instanceID int) string {
+	return fmt.Sprintf("%s-%d-%d", user, instanceID, time.Now().UnixNano())
+}
+
+// updateSessionRecordStatus 更新会话记录状态
+func updateSessionRecordStatus(sessionID string, status int8, duration int) {
+	now := time.Now()
+	models.DB.Model(&models.OpsSessionRecord{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"status":   status,
+			"end_time": &now,
+			"duration": duration,
+		})
+}
+
+// updateSessionRecord 更新会话记录
+func updateSessionRecord(sessionID string, endTime time.Time, duration int, status int8, fileSize int64) {
+	models.DB.Model(&models.OpsSessionRecord{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"end_time":      &endTime,
+			"duration":       duration,
+			"status":        status,
+			"recording_file": fmt.Sprintf("recordings/%s/%s.cast", endTime.Format("2006-01-02"), sessionID),
+			"file_size":     fileSize,
+		})
+}
+
+// recordingReader 包装读取器，记录输入数据
+type recordingReader struct {
+	reader   io.Reader
+	recorder *utils.SessionRecorder
+	record   bool
+}
+
+func newRecordingReader(reader io.Reader, recorder *utils.SessionRecorder, record bool) *recordingReader {
+	return &recordingReader{
+		reader:   reader,
+		recorder: recorder,
+		record:   record,
+	}
+}
+
+func (r *recordingReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 && r.record && r.recorder != nil {
+		_ = r.recorder.RecordInput(string(p[:n]))
+	}
+	return n, err
+}
+
+// recordingWriter 包装写入器，记录输出数据
+type recordingWriter struct {
+	writer   io.Writer
+	recorder *utils.SessionRecorder
+	record   bool
+}
+
+func newRecordingWriter(writer io.Writer, recorder *utils.SessionRecorder, record bool) *recordingWriter {
+	return &recordingWriter{
+		writer:   writer,
+		recorder: recorder,
+		record:   record,
+	}
+}
+
+func (w *recordingWriter) Write(p []byte) (int, error) {
+	if w.record && w.recorder != nil {
+		_ = w.recorder.RecordOutput(string(p))
+	}
+	return w.writer.Write(p)
 }
 
 // --------- 主机模型与存储 ---------

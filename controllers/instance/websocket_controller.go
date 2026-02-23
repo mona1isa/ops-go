@@ -20,6 +20,23 @@ import (
 	"time"
 )
 
+// WebSocketTerminator WebSocket 会话终止器
+type WebSocketTerminator struct{}
+
+// Terminate 实现 instance.SessionTerminator 接口
+func (t *WebSocketTerminator) Terminate(sessionID string) error {
+	controller := &WebSocketController{}
+	return controller.TerminateSession(sessionID)
+}
+
+// 全局 WebSocket 终止器
+var webSocketTerminator = &WebSocketTerminator{}
+
+// GetWebSocketTerminator 获取 WebSocket 终止器实例
+func GetWebSocketTerminator() *WebSocketTerminator {
+	return webSocketTerminator
+}
+
 type WebSocketController struct {
 	controllers.BaseController
 }
@@ -35,6 +52,7 @@ type SSHSession struct {
 	KeyId         int
 	Recorder      *utils.SessionRecorder // 会话录制器
 	SessionRecord *models.OpsSessionRecord // 会话记录
+	WebSocketConn *websocket.Conn        // WebSocket 连接引用（用于发送终止消息）
 	mu            sync.Mutex
 }
 
@@ -332,6 +350,7 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		KeyId:         int(key.ID),
 		Recorder:      recorder,
 		SessionRecord: sessionRecord,
+		WebSocketConn: conn, // 保存 WebSocket 连接引用
 	}
 
 	sessionMutex.Lock()
@@ -446,6 +465,108 @@ func (c *WebSocketController) handleData(sessionID string, msg WebSocketMessage)
 
 // handleClose 关闭SSH会话
 func (c *WebSocketController) handleClose(sessionID string) {
+	c.closeSession(sessionID, models.SessionStatusCompleted)
+}
+
+// TerminateSession 终止会话（管理员强制终止）
+func (c *WebSocketController) TerminateSession(sessionID string) error {
+	sessionMutex.RLock()
+	sshSession, ok := activeSessions[sessionID]
+	sessionMutex.RUnlock()
+
+	if !ok {
+		return errors.New("会话不存在或已结束")
+	}
+
+	sshSession.mu.Lock()
+	defer sshSession.mu.Unlock()
+
+	// 向用户发送终止消息
+	if sshSession.WebSocketConn != nil {
+		message := "\r\n\r\n========================================\r\n"
+		message += "⚠️  警告：会话已被管理员终止\r\n"
+		message += "========================================\r\n"
+		message += "原因：管理员强制结束该会话\r\n"
+		message += "时间：" + time.Now().Format("2006-01-02 15:04:05") + "\r\n"
+		message += "========================================\r\n"
+		message += "\r\n无法继续执行远程操作，连接即将关闭...\r\n\r\n"
+
+		// 发送终止消息到 WebSocket
+		if err := sshSession.WebSocketConn.WriteJSON(WebSocketMessage{
+			Type: "terminated",
+			Data: message,
+		}); err != nil {
+			log.Printf("发送终止消息失败: %v", err)
+		}
+
+		// 给用户一点时间看到消息
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// 更新会话记录状态为已终止
+	now := time.Now()
+	if sshSession.SessionRecord != nil {
+		duration := int(now.Sub(sshSession.SessionRecord.StartTime).Seconds())
+		var fileSize int64
+		if sshSession.Recorder != nil {
+			fileSize, _ = sshSession.Recorder.GetFileSize()
+		}
+		models.DB.Model(&models.OpsSessionRecord{}).
+			Where("session_id = ?", sessionID).
+			Updates(map[string]interface{}{
+				"end_time":  &now,
+				"duration":  duration,
+				"status":    models.SessionStatusAborted,
+				"file_size": fileSize,
+			})
+	}
+
+	// 关闭标准输入管道（阻止用户继续输入）
+	if sshSession.StdinPipe != nil {
+		sshSession.StdinPipe.Close()
+	}
+
+	// 关闭SSH会话
+	if sshSession.Session != nil {
+		sshSession.Session.Close()
+	}
+
+	// 关闭SSH连接
+	if sshSession.Conn != nil {
+		sshSession.Conn.Close()
+	}
+
+	// 关闭录制器
+	if sshSession.Recorder != nil {
+		if err := sshSession.Recorder.Close(); err != nil {
+			log.Printf("关闭录制器失败: %v", err)
+		}
+	}
+
+	// 关闭 WebSocket 连接
+	if sshSession.WebSocketConn != nil {
+		// 先发送关闭消息
+		_ = sshSession.WebSocketConn.WriteJSON(WebSocketMessage{
+			Type: "close",
+			Data: "会话已终止",
+		})
+		// 延迟一下，让前端收到消息
+		time.Sleep(100 * time.Millisecond)
+		// 关闭连接
+		_ = sshSession.WebSocketConn.Close()
+	}
+
+	// 从活跃会话列表中移除
+	sessionMutex.Lock()
+	delete(activeSessions, sessionID)
+	sessionMutex.Unlock()
+
+	log.Printf("Web Terminal 会话已终止: %s", sessionID)
+	return nil
+}
+
+// closeSession 关闭SSH会话（内部方法）
+func (c *WebSocketController) closeSession(sessionID string, status int8) {
 	sessionMutex.Lock()
 	defer sessionMutex.Unlock()
 
@@ -466,7 +587,7 @@ func (c *WebSocketController) handleClose(sessionID string) {
 				updates := map[string]interface{}{
 					"end_time":       &endTime,
 					"duration":       duration,
-					"status":         models.SessionStatusCompleted,
+					"status":         status,
 					"recording_file": sshSession.Recorder.GetFilePath(),
 					"file_size":      fileSize,
 				}

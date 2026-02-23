@@ -15,8 +15,10 @@ func (r *SessionRecordRouter) Setup(api *gin.RouterGroup) {
 		// 注意：特定路径必须在通配路由 /:id 之前注册，否则会被错误匹配
 		group.GET("/list", controller.List)
 		group.GET("/statistics", controller.Statistics)
+		group.GET("/active", controller.ListActiveSessions)
 		group.GET("/playback/:id", controller.Playback)
 		group.GET("/download/:id", controller.Download)
+		group.POST("/terminate/:sessionID", controller.TerminateSession)
 		group.GET("/:id", controller.Get)
 		group.DELETE("/:id", controller.Delete)
 	}

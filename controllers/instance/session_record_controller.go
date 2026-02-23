@@ -197,3 +197,59 @@ func (c *SessionRecordController) Download(ctx *gin.Context) {
 	// 下载文件
 	ctx.FileAttachment(record.RecordingFile, record.SessionID+".cast")
 }
+
+// ListActiveSessions 获取活跃会话列表
+// @Summary 获取活跃会话列表
+// @Tags 会话记录
+// @Accept json
+// @Produce json
+// @Success 200 {object} controllers.Response
+// @Router /api/session-record/active [get]
+func (c *SessionRecordController) ListActiveSessions(ctx *gin.Context) {
+	service := &instance.SessionRecordService{}
+	sessions, err := service.ListActiveSessions()
+	if err != nil {
+		c.Failure(ctx, http.StatusInternalServerError, "获取活跃会话失败: "+err.Error())
+		return
+	}
+
+	c.Success(ctx, sessions)
+}
+
+// TerminateSession 终止会话
+// @Summary 终止会话
+// @Tags 会话记录
+// @Accept json
+// @Produce json
+// @Param sessionID path string true "会话ID"
+// @Success 200 {object} controllers.Response
+// @Router /api/session-record/terminate/{sessionID} [post]
+func (c *SessionRecordController) TerminateSession(ctx *gin.Context) {
+	sessionID := ctx.Param("sessionID")
+
+	// 简化权限校验：只检查是否为 admin
+	// 从上下文获取用户名，中间件已经验证了登录状态
+	userName, exists := ctx.Get("userName")
+	if !exists {
+		c.Failure(ctx, http.StatusBadRequest, "用户信息不存在")
+		return
+	}
+
+	// 判断是否为 admin
+	userNameStr, ok := userName.(string)
+	if !ok || userNameStr != "admin" {
+		c.Failure(ctx, http.StatusForbidden, "只有管理员可以终止会话")
+		return
+	}
+
+	// admin 可以终止任意会话，不需要检查 userId
+	service := &instance.SessionRecordService{}
+	if err := service.TerminateSession(sessionID, true, 0); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.Success(ctx, gin.H{
+		"message": "会话已终止",
+	})
+}

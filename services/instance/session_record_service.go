@@ -5,8 +5,10 @@ import (
 	"errors"
 	"github.com/zhany/ops-go/models"
 	"gorm.io/gorm"
+	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 type SessionRecordService struct{}
@@ -197,4 +199,88 @@ func (s *SessionRecordService) GetPlaybackContent(filePath string) (string, erro
 
 	// 返回所有行，用 \n 连接
 	return strings.Join(lines, "\n"), nil
+}
+
+// ListActiveSessions 列出活跃会话
+func (s *SessionRecordService) ListActiveSessions() ([]map[string]interface{}, error) {
+	// 从数据库查询活跃会话
+	var records []models.OpsSessionRecord
+	if err := models.DB.Where("status = ?", models.SessionStatusActive).
+		Order("start_time DESC").
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	// 转换为响应格式
+	sessions := make([]map[string]interface{}, 0, len(records))
+	for _, record := range records {
+		sessions = append(sessions, map[string]interface{}{
+			"id":            record.ID,
+			"sessionId":     record.SessionID,
+			"userId":        record.UserID,
+			"instanceId":    record.InstanceID,
+			"instanceName":  record.InstanceName,
+			"instanceIp":    record.InstanceIP,
+			"keyUser":       record.KeyUser,
+			"startTime":     record.StartTime,
+			"duration":      int(time.Since(record.StartTime).Seconds()),
+			"status":        record.Status,
+		})
+	}
+
+	return sessions, nil
+}
+
+// SessionTerminator 接口，用于终止会话连接
+type SessionTerminator interface {
+	Terminate(sessionID string) error
+}
+
+// 终止器列表（支持多个终止器）
+var terminators []SessionTerminator
+
+// RegisterTerminator 注册会话终止器
+func RegisterTerminator(terminator SessionTerminator) {
+	terminators = append(terminators, terminator)
+}
+
+// TerminateSession 终止会话
+func (s *SessionRecordService) TerminateSession(sessionID string, isAdmin bool, currentUserId int) error {
+	// 查询会话记录
+	var record models.OpsSessionRecord
+	if err := models.DB.Where("session_id = ?", sessionID).First(&record).Error; err != nil {
+		return errors.New("会话不存在")
+	}
+
+	// 检查会话状态
+	if record.Status != models.SessionStatusActive {
+		return errors.New("会话已结束")
+	}
+
+	// 尝试通过所有终止器关闭连接
+	for _, terminator := range terminators {
+		if err := terminator.Terminate(sessionID); err != nil {
+			log.Printf("通过终止器关闭会话失败: %v", err)
+		} else {
+			// 至少有一个终止器成功终止会话
+			// 某些终止器（如 Bastion）内部已经更新了数据库，但为了保险，下面还是会更新
+			break
+		}
+	}
+
+	// 更新数据库状态
+	now := time.Now()
+	duration := int(now.Sub(record.StartTime).Seconds())
+
+	if err := models.DB.Model(&models.OpsSessionRecord{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"end_time": &now,
+			"duration":  duration,
+			"status":    models.SessionStatusAborted,
+		}).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
