@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+const (
+	// AdminUserId 系统管理员用户ID（内置超级管理员）
+	// 用于权限控制中的超级管理员判断
+	AdminUserId = 1
+)
+
 type Base struct {
 	ID        int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`

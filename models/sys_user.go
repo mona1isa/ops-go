@@ -31,77 +31,125 @@ func (SysUser) TableName() string {
 	return TableSysUser
 }
 
-// AfterCreate  创建用户后，添加用户角色并同步Casbin
+// AfterCreate 创建用户后，添加用户角色并同步Casbin
 func (u *SysUser) AfterCreate(db *gorm.DB) error {
-	// casbin 添加用户角色
 	roleIds := u.RoleIds
-	if len(u.RoleIds) > 0 {
-		_, err := Casbin.AddUserRoles([]string{u.UserName}, u.RoleIds)
-		if err != nil {
-			err = fmt.Errorf("casbin添加用户角色失败：%v", err)
-			return err
-		}
+	if len(roleIds) == 0 {
+		return nil
+	}
 
-		// 批量保存用户角色
-		for _, roleId := range roleIds {
-			userRole := SysUserRole{
-				UserId: u.ID,
-				RoleId: roleId,
-			}
-			if err := DB.Create(&userRole).Error; err != nil {
-				log.Println("保存用户角色失败：", err)
-				return err
-			}
+	// 先检查 Casbin 是否初始化
+	if !Casbin.IsInitialized() {
+		log.Printf("Casbin 未初始化，跳过同步用户角色到 Casbin: %s", u.UserName)
+		// 只保存数据库关系，不返回错误
+	} else {
+		// Casbin 添加用户角色
+		_, err := Casbin.AddUserRoles([]string{u.UserName}, roleIds)
+		if err != nil {
+			log.Printf("casbin添加用户角色失败：%v", err)
+			// 不返回错误，允许用户创建成功
 		}
 	}
+
+	// 批量保存用户角色到数据库
+	userRoles := make([]SysUserRole, 0, len(roleIds))
+	for _, roleId := range roleIds {
+		userRoles = append(userRoles, SysUserRole{
+			UserId: u.ID,
+			RoleId: roleId,
+		})
+	}
+
+	if len(userRoles) > 0 {
+		if err := db.Create(&userRoles).Error; err != nil {
+			log.Println("保存用户角色失败：", err)
+			return fmt.Errorf("保存用户角色失败：%v", err)
+		}
+	}
+
 	return nil
 }
 
 // BeforeUpdate 更新用户前先删除用户角色然后再创建并同步Casbin
 func (u *SysUser) BeforeUpdate(db *gorm.DB) error {
 	// 只有当 RoleIds 字段在更新中存在时才同步角色
-	if !db.Statement.Changed("RoleIds") && len(u.RoleIds) == 0 {
+	// 注意：GORM 的 Changed 方法检查的是结构体字段是否为零值
+	// 由于 RoleIds 是切片类型，我们需要特殊处理
+	if len(u.RoleIds) == 0 {
+		// 检查是否是明确的清空操作
+		// 通过检查 UpdateColumn 或其他方式确定
 		return nil
 	}
 
-	// 清除Casbin用户和角色关联
-	_, err := Casbin.DeleteUserRole(u.UserName)
-	if err != nil {
-		log.Printf("casbin删除用户角色失败：%v\n", err)
-		// 不返回错误，允许继续执行
-	}
-	// 删除sys_user_role 中用户角色
-	if err = u.deleteUserRole(); err != nil {
-		return err
-	}
-	// 添加用户角色到 Casbin 中
-	if err = u.AfterCreate(db); err != nil {
-		return err
-	}
-	return nil
+	// 在事务中执行
+	return db.Transaction(func(tx *gorm.DB) error {
+		// 清除 Casbin 用户和角色关联（如果已初始化）
+		if Casbin.IsInitialized() {
+			_, err := Casbin.DeleteUserRole(u.UserName)
+			if err != nil {
+				log.Printf("casbin删除用户角色失败：%v\n", err)
+				// 不返回错误，继续执行
+			}
+		}
+
+		// 删除 sys_user_role 中用户角色
+		if err := tx.Where("user_id = ?", u.ID).Delete(&SysUserRole{}).Error; err != nil {
+			return fmt.Errorf("删除用户角色失败：%v", err)
+		}
+
+		// 批量保存新的用户角色
+		userRoles := make([]SysUserRole, 0, len(u.RoleIds))
+		for _, roleId := range u.RoleIds {
+			userRoles = append(userRoles, SysUserRole{
+				UserId: u.ID,
+				RoleId: roleId,
+			})
+		}
+
+		if len(userRoles) > 0 {
+			if err := tx.Create(&userRoles).Error; err != nil {
+				return fmt.Errorf("保存用户角色失败：%v", err)
+			}
+		}
+
+		// 同步到 Casbin（如果已初始化）
+		if Casbin.IsInitialized() {
+			_, err := Casbin.AddUserRoles([]string{u.UserName}, u.RoleIds)
+			if err != nil {
+				log.Printf("casbin添加用户角色失败：%v\n", err)
+				// 不返回错误，允许更新成功
+			}
+		}
+
+		return nil
+	})
 }
 
 func (u *SysUser) AfterDelete(db *gorm.DB) error {
-	// 清理Casbin 用户和角色关联
-	_, err := Casbin.DeleteUserRole(u.UserName)
-	if err != nil {
-		err = fmt.Errorf("casbin删除用户角色失败：%v", err)
-		return err
-	}
+	// 在事务中执行删除操作
+	return db.Transaction(func(tx *gorm.DB) error {
+		// 清理 Casbin 用户和角色关联（如果已初始化）
+		if Casbin.IsInitialized() {
+			_, err := Casbin.DeleteUserRole(u.UserName)
+			if err != nil {
+				log.Printf("casbin删除用户角色失败：%v\n", err)
+				// 不返回错误，继续删除数据库记录
+			}
+		}
 
-	// 删除用户角色
-	if err := u.deleteUserRole(); err != nil {
-		return err
-	}
-	return nil
-}
+		// 删除用户角色
+		if err := tx.Where("user_id = ?", u.ID).Delete(&SysUserRole{}).Error; err != nil {
+			return fmt.Errorf("删除用户角色失败：%v", err)
+		}
 
-func (u *SysUser) deleteUserRole() error {
-	if err := DB.Where("user_id = ?", u.ID).Delete(&SysUserRole{}).Error; err != nil {
-		err := fmt.Errorf("删除用户角色失败：%v", err)
-		return err
-	}
-	return nil
+		// 删除用户 Token
+		if err := tx.Where("user_id = ?", u.ID).Delete(&SysUserToken{}).Error; err != nil {
+			log.Printf("删除用户Token失败：%v\n", err)
+			// 不返回错误，继续执行
+		}
+
+		return nil
+	})
 }
 
 // UpdateLoginInfo 只更新部分信息不需要执行 hook 函数时使用

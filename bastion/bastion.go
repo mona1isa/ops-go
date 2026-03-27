@@ -768,8 +768,8 @@ func (h *HostStore) Refresh() {
 	var instances []models.OpsInstance
 	var err error
 
-	// 判断是否为 admin 用户
-	if h.user == "admin" {
+	// 判断是否为超级管理员（ID=1）或 admin 用户名（兼容旧逻辑）
+	if sysUser.ID == models.AdminUserId || h.user == "admin" {
 		// admin 用户查询所有主机
 		if err = models.DB.Where("del_flag = ?", "0").Find(&instances).Error; err != nil {
 			log.Printf("获取所有主机失败: %s, 错误: %v", h.user, err)

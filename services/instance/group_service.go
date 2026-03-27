@@ -2,10 +2,15 @@ package instance
 
 import (
 	"errors"
+	"fmt"
 	"github.com/zhany/ops-go/controllers/instance/api"
 	"github.com/zhany/ops-go/models"
 	"log"
+	"net"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type GroupService struct {
@@ -223,6 +228,260 @@ func (s *GroupService) PageGroupInstance(request api.PageGroupInstanceRequest) (
 	page.PageNum = request.PageNum
 	page.PageSize = request.PageSize
 	return page, nil
+}
+
+// ScanHosts 扫描网段内的主机，检测22和3389端口
+func (s *GroupService) ScanHosts(ipRange string) ([]api.ScannedHost, error) {
+	var hosts []api.ScannedHost
+	var ips []string
+
+	// 解析IP网段
+	if strings.Contains(ipRange, "/") {
+		// CIDR格式，如 192.168.1.0/24
+		ips = parseCIDR(ipRange)
+	} else if strings.Contains(ipRange, "-") {
+		// 范围格式，如 192.168.1.1-100
+		ips = parseRange(ipRange)
+	} else {
+		// 单个IP
+		ips = []string{ipRange}
+	}
+
+	if len(ips) == 0 {
+		return hosts, errors.New("无效的IP网段格式")
+	}
+
+	// 限制扫描的IP数量，避免过多
+	if len(ips) > 256 {
+		ips = ips[:256]
+	}
+
+	// 并发扫描
+	var wg sync.WaitGroup
+	hostChan := make(chan api.ScannedHost, len(ips))
+	semaphore := make(chan struct{}, 50) // 限制并发数量
+
+	for _, ip := range ips {
+		wg.Add(1)
+		go func(ipAddr string) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// 检测SSH端口(22)
+			if isOpen, _ := checkPort(ipAddr, 22, 2*time.Second); isOpen {
+				hostChan <- api.ScannedHost{
+					Ip:     ipAddr,
+					Port:   22,
+					OsType: "Linux",
+				}
+				return
+			}
+
+			// 检测RDP端口(3389)
+			if isOpen, _ := checkPort(ipAddr, 3389, 2*time.Second); isOpen {
+				hostChan <- api.ScannedHost{
+					Ip:     ipAddr,
+					Port:   3389,
+					OsType: "Windows",
+				}
+				return
+			}
+		}(ip)
+	}
+
+	// 等待所有扫描完成
+	go func() {
+		wg.Wait()
+		close(hostChan)
+	}()
+
+	// 收集结果
+	for host := range hostChan {
+		hosts = append(hosts, host)
+	}
+
+	return hosts, nil
+}
+
+// 解析CIDR格式的IP网段
+func parseCIDR(cidr string) []string {
+	var ips []string
+	ip, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return ips
+	}
+
+	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); incrementIP(ip) {
+		ips = append(ips, ip.String())
+	}
+
+	// 移除网络地址和广播地址
+	if len(ips) > 2 {
+		ips = ips[1 : len(ips)-1]
+	}
+	return ips
+}
+
+// 解析范围格式的IP
+func parseRange(ipRange string) []string {
+	var ips []string
+	parts := strings.Split(ipRange, "-")
+	if len(parts) != 2 {
+		return ips
+	}
+
+	baseIP := parts[0]
+	endNum, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return ips
+	}
+
+	// 提取基础IP的前三段
+	ipParts := strings.Split(baseIP, ".")
+	if len(ipParts) != 4 {
+		return ips
+	}
+
+	startNum, _ := strconv.Atoi(ipParts[3])
+	prefix := strings.Join(ipParts[:3], ".")
+
+	for i := startNum; i <= endNum && i <= 255; i++ {
+		ips = append(ips, fmt.Sprintf("%s.%d", prefix, i))
+	}
+
+	return ips
+}
+
+// IP增量
+func incrementIP(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
+}
+
+// 检测端口是否开放
+func checkPort(ip string, port int, timeout time.Duration) (bool, error) {
+	address := fmt.Sprintf("%s:%d", ip, port)
+	conn, err := net.DialTimeout("tcp", address, timeout)
+	if err != nil {
+		return false, err
+	}
+	conn.Close()
+	return true, nil
+}
+
+// SaveScannedHosts 保存扫描到的主机
+func (s *GroupService) SaveScannedHosts(request api.SaveScannedHostsRequest, userId string) error {
+	groupId := request.GroupId
+	hosts := request.Hosts
+
+	if len(hosts) == 0 {
+		return errors.New("没有要保存的主机")
+	}
+
+	// 校验分组是否存在
+	var count int64
+	if err := models.DB.Model(&models.OpsGroup{}).Where("id = ?", groupId).Count(&count).Error; err != nil {
+		log.Println("查询分组是否存在失败：", err)
+		return errors.New("查询分组是否存在失败")
+	}
+	if count == 0 {
+		return errors.New("分组不存在")
+	}
+
+	// 查询已存在的IP，避免重复添加
+	var existingIPs []string
+	for _, host := range hosts {
+		existingIPs = append(existingIPs, host.Ip)
+	}
+
+	var existingInstances []models.OpsInstance
+	models.DB.Where("ip IN ?", existingIPs).Find(&existingInstances)
+
+	existingIPMap := make(map[string]int)
+	for _, inst := range existingInstances {
+		existingIPMap[inst.Ip] = inst.ID
+	}
+
+	var newInstances []models.OpsInstance
+	var instanceGroups []models.OpsInstanceGroup
+
+	for _, host := range hosts {
+		if instanceId, exists := existingIPMap[host.Ip]; exists {
+			// IP已存在，只添加分组关联（如果还没有关联）
+			var count int64
+			models.DB.Model(&models.OpsInstanceGroup{}).Where("group_id = ? AND instance_id = ?", groupId, instanceId).Count(&count)
+			if count == 0 {
+				instanceGroups = append(instanceGroups, models.OpsInstanceGroup{
+					GroupId:    groupId,
+					InstanceId: instanceId,
+				})
+			}
+		} else {
+			// 新主机 - 使用扫描结果设置字段
+			var osName string
+			var cpu, memMb, diskGb int
+			if host.OsType == "Linux" {
+				osName = "Linux"
+				cpu = 1
+				memMb = 1024
+				diskGb = 20
+			} else {
+				osName = "Windows"
+				cpu = 2
+				memMb = 4096
+				diskGb = 50
+			}
+			inst := models.OpsInstance{
+				Name:   host.Ip,
+				Ip:     host.Ip,
+				Cpu:    cpu,
+				MemMb:  memMb,
+				DiskGb: diskGb,
+				Os:     osName,
+				Status: "1",
+			}
+			inst.CreateBy = userId
+			inst.UpdateBy = userId
+			newInstances = append(newInstances, inst)
+		}
+	}
+
+	// 开启事务
+	tx := models.DB.Begin()
+
+	// 批量插入新主机
+	if len(newInstances) > 0 {
+		if err := tx.Create(&newInstances).Error; err != nil {
+			tx.Rollback()
+			log.Println("批量插入主机失败：", err)
+			return errors.New("保存主机失败")
+		}
+
+		// 为新插入的主机添加分组关联
+		for _, inst := range newInstances {
+			instanceGroups = append(instanceGroups, models.OpsInstanceGroup{
+				GroupId:    groupId,
+				InstanceId: inst.ID,
+			})
+		}
+	}
+
+	// 批量插入分组关联
+	if len(instanceGroups) > 0 {
+		if err := tx.Create(&instanceGroups).Error; err != nil {
+			tx.Rollback()
+			log.Println("添加主机到分组失败：", err)
+			return errors.New("添加主机到分组失败")
+		}
+	}
+
+	tx.Commit()
+	return nil
 }
 
 // AvailableInstance 查询不在分组内的实例用于添加到分组中

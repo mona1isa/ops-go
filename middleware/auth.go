@@ -25,23 +25,31 @@ type CustomClaims struct {
 var issuer = os.Getenv("JWT_ISSUER")
 var secret = os.Getenv("JWT_SECRET")
 
-// URL 白名单
-var ExcludePaths = [...]string{
+// PublicPaths 公开访问路径（无需认证和权限校验）
+// 注意：此变量在 casbin.go 中被复用
+var PublicPaths = []string{
 	"/api/captcha/generate",
 	"/api/user/login",
 	"/api/user/logout",
 	"/api/instance/terminal",
-	//"/api/menu/getRoutes",
+}
+
+// IsPublicPath 检查路径是否为公开路径（无需认证）
+func IsPublicPath(path string) bool {
+	for _, p := range PublicPaths {
+		if match, _ := filepath.Match(p, path); match {
+			return true
+		}
+	}
+	return false
 }
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		currentPath := ctx.Request.URL.Path
-		for _, path := range ExcludePaths {
-			if match, _ := filepath.Match(path, currentPath); match {
-				ctx.Next()
-				return
-			}
+		if IsPublicPath(currentPath) {
+			ctx.Next()
+			return
 		}
 		authorization := ctx.GetHeader("Authorization")
 		if authorization == "" {

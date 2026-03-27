@@ -9,6 +9,7 @@ type GroupRouter struct{}
 
 func (*GroupRouter) Setup(r *gin.RouterGroup) {
 	groupController := instance.GroupController{}
+	hostScanController := instance.HostScanController{}
 	group := r.Group("/group")
 	{
 		group.POST("/add", groupController.AddGroupHandler)
@@ -18,5 +19,8 @@ func (*GroupRouter) Setup(r *gin.RouterGroup) {
 		group.POST("/instance/ops", groupController.GroupInstanceHandler)
 		group.POST("/instances/page", groupController.PageGroupInstanceHandler)
 		group.POST("/instances/available", groupController.AvailableInstanceHandler)
+		// 同步主机相关接口
+		group.POST("/sync/scan", hostScanController.ScanHostsHandler)
+		group.POST("/sync/save", hostScanController.SaveScannedHostsHandler)
 	}
 }
