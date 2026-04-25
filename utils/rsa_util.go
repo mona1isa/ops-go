@@ -240,8 +240,9 @@ func DecryptKey(encryptedKey string) (key string, err error) {
 	}
 	credentials, err := Decrypt(privateKey, encrptPwd)
 	if err != nil {
-		log.Println("登录凭证解密失败：", err)
-		return "", errors.New("登录凭证解密失败")
+		// RSA 解密失败，说明该字符串虽然符合 Base64 格式，但实际并非加密数据
+		// 直接返回原文，兼容明文存储的凭证
+		return encryptedKey, nil
 	}
 	return string(credentials), nil
 }
