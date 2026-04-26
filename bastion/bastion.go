@@ -467,17 +467,12 @@ func connectHostFlow(s gliderssh.Session, store *HostStore, sel string, reader *
 
 	selectedKey := keys[keyIndex-1]
 	log.Printf("selectedKey: %+v", selectedKey)
-	// 获取明文凭证（如果是加密的密码则解密）
-	credentials := selectedKey.Credentials
-	if selectedKey.Type == 1 {
-		// 密码类型，需要解密
-		decrypted, err := utils.DecryptKey(credentials)
-		if err != nil {
-			log.Printf("解密凭证失败: %v", err)
-			fmt.Fprintln(s, "解密凭证失败")
-			return
-		}
-		credentials = decrypted
+	// 获取明文凭证（密码和密钥都可能加密存储）
+	credentials, err := utils.DecryptKey(selectedKey.Credentials)
+	if err != nil {
+		log.Printf("解密凭证失败: %v", err)
+		fmt.Fprintln(s, "解密凭证失败")
+		return
 	}
 
 	// 连接到远程主机

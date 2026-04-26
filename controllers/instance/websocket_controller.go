@@ -252,19 +252,11 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		log.Printf("创建会话记录失败: %v", err)
 	}
 
-	// 获取明文凭证
-	var credentials string
-	var err error
-	if key.Type == 1 {
-		// 密码类型，需要解密
-		credentials, err = utils.DecryptKey(key.Credentials)
-		if err != nil {
-			log.Printf("解密凭证失败: %v", err)
-			return errors.New("解密凭证失败")
-		}
-	} else {
-		// 密钥类型，直接使用
-		credentials = key.Credentials
+	// 获取明文凭证（密码和密钥都可能加密存储）
+	credentials, err := utils.DecryptKey(key.Credentials)
+	if err != nil {
+		log.Printf("解密凭证失败: %v", err)
+		return errors.New("解密凭证失败")
 	}
 
 	// 建立SSH连接

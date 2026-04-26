@@ -35,16 +35,14 @@ func (s *KeysService) AddKey(request api.AddKeysRequest) (err error) {
 		return errors.New("密钥名称已存在")
 	}
 
-	// 如果是密码类型，则加密存储
+	// 加密存储
 	credentials := request.Credentials
-	if request.Type == 1 {
-		encrypted, err := utils.EncryptPassword(credentials)
-		if err != nil {
-			log.Println("加密密码失败：", err)
-			return errors.New("加密密码失败")
-		}
-		credentials = encrypted
+	encrypted, err := utils.EncryptPassword(credentials)
+	if err != nil {
+		log.Println("加密凭证失败：", err)
+		return errors.New("加密凭证失败")
 	}
+	credentials = encrypted
 
 	key := models.OpsKey{
 		Name:        name,
@@ -95,17 +93,20 @@ func (s *KeysService) EditKey(request api.UpdateKeysRequest) (err error) {
 	key.UpdateBy = request.UpdateBy
 	key.Remark = request.Remark
 
-	// 如果是密码类型且凭证有变化，则加密存储
-	if request.Type == 1 && request.Credentials != "" {
-		encrypted, err := utils.EncryptPassword(request.Credentials)
-		if err != nil {
-			log.Println("加密密码失败：", err)
-			return errors.New("加密密码失败")
+	// 如果是密码或密钥类型且凭证有变化，则加密存储
+	// 防护：如果前端传回的是已加密的密文（解密后与原值不同），则不再二次加密
+	if (request.Type == 1 || request.Type == 2) && request.Credentials != "" {
+		decrypted, _ := utils.DecryptKey(request.Credentials)
+		if decrypted == request.Credentials {
+			// 传入的是明文，需要加密
+			encrypted, err := utils.EncryptPassword(request.Credentials)
+			if err != nil {
+				log.Println("加密凭证失败：", err)
+				return errors.New("加密凭证失败")
+			}
+			key.Credentials = encrypted
 		}
-		key.Credentials = encrypted
-	} else if request.Credentials != "" {
-		// 密钥类型，直接存储
-		key.Credentials = request.Credentials
+		// 否则传入的是密文，保留数据库原值，不做更新
 	}
 
 	if err := models.DB.Save(&key).Error; err != nil {
