@@ -13,6 +13,9 @@ func main() {
 	// 注册 WebSocket 会话终止器
 	instanceService.RegisterTerminator(instance.GetWebSocketTerminator())
 
+	// 初始化高危指令规则
+	instanceService.InitDangerousCommands()
+
 	// 启动堡垒机服务
 	go bastion.Init()
 	// 启动Web服务
