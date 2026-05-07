@@ -36,3 +36,26 @@ type PageGroupInstanceResponse struct {
 	TotalPage int                  `json:"totalPage"`
 	Data      []models.OpsInstance `json:"data"`
 }
+
+// 扫描主机请求
+type ScanHostsRequest struct {
+	IpRange string `json:"ipRange" binding:"required"` // IP网段，如 192.168.1.0/24 或 192.168.1.1-100
+}
+
+// 扫描到的主机信息
+type ScannedHost struct {
+	Ip     string `json:"ip"`
+	Port   int    `json:"port"`
+	OsType string `json:"osType"` // Linux 或 Windows
+}
+
+// 扫描主机响应
+type ScanHostsResponse struct {
+	Hosts []ScannedHost `json:"hosts"`
+}
+
+// 保存扫描主机请求
+type SaveScannedHostsRequest struct {
+	GroupId int            `json:"groupId" binding:"required"`
+	Hosts   []ScannedHost  `json:"hosts" binding:"required"`
+}

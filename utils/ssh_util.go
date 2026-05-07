@@ -19,23 +19,30 @@ type HostInfo struct {
 
 // TestConnect 测试SSH连通性
 func TestConnect(info *HostInfo) error {
-	// 如果是密码类型，解密凭证
-	credentials := info.Credentials
-	if info.Type == 1 {
-		decrypted, err := DecryptKey(credentials)
-		if err != nil {
-			log.Printf("解密凭证失败: %v", err)
-			return fmt.Errorf("解密凭证失败: %w", err)
-		}
-		credentials = decrypted
+	// 解密凭证（密码和密钥都可能加密存储）
+	credentials, err := DecryptKey(info.Credentials)
+	if err != nil {
+		log.Printf("解密凭证失败: %v", err)
+		return fmt.Errorf("解密凭证失败: %w", err)
 	}
 
 	// 配置 SSH 客户端
+	var authMethods []ssh.AuthMethod
+	if info.Type == 2 {
+		// 密钥认证
+		signer, err := ssh.ParsePrivateKey([]byte(credentials))
+		if err != nil {
+			return fmt.Errorf("解析 SSH 密钥失败: %w", err)
+		}
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
+	} else {
+		// 密码认证
+		authMethods = append(authMethods, ssh.Password(credentials))
+	}
+
 	config := &ssh.ClientConfig{
-		User: info.User,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(credentials),
-		},
+		User:            info.User,
+		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 忽略主机密钥验证（测试用）
 		Timeout:         5 * time.Second,             // 设置连接超时
 	}

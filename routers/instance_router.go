@@ -11,6 +11,7 @@ type InstanceRouter struct {
 func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 	instanceController := instance.InstanceController{}
 	wsController := instance.WebSocketController{}
+	sftpController := instance.SftpController{}
 	instanceGroup := r.Group("/instance")
 	{
 		instanceGroup.POST("/add", instanceController.AddInstanceHandler)
@@ -27,5 +28,13 @@ func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 
 		// WebSocket终端连接接口
 		instanceGroup.GET("/terminal", wsController.WebSocketHandler)
+
+		// SFTP 文件管理接口
+		instanceGroup.POST("/sftp/list", sftpController.ListHandler)
+		instanceGroup.POST("/sftp/download", sftpController.DownloadHandler)
+		instanceGroup.POST("/sftp/upload", sftpController.UploadHandler)
+		instanceGroup.POST("/sftp/remove", sftpController.RemoveHandler)
+		instanceGroup.POST("/sftp/rename", sftpController.RenameHandler)
+		instanceGroup.POST("/sftp/mkdir", sftpController.MkdirHandler)
 	}
 }

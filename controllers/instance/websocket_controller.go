@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/zhany/ops-go/controllers"
@@ -53,6 +54,8 @@ type SSHSession struct {
 	Recorder      *utils.SessionRecorder // 会话录制器
 	SessionRecord *models.OpsSessionRecord // 会话记录
 	WebSocketConn *websocket.Conn        // WebSocket 连接引用（用于发送终止消息）
+	InputBuffer   string                 // 用户输入缓冲区（用于高危指令拦截）
+	IsAdmin       bool                   // 是否为管理员
 	mu            sync.Mutex
 }
 
@@ -157,10 +160,26 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 	// 生成会话ID
 	sessionID := generateSessionID(userId, instanceId)
 
+	isAdmin := userId == controllers.AdminUserId
+
+	// 从查询参数读取终端尺寸
+	cols := 80
+	rows := 24
+	if colsStr := ctx.Query("cols"); colsStr != "" {
+		if v, err := strconv.Atoi(colsStr); err == nil && v > 0 {
+			cols = v
+		}
+	}
+	if rowsStr := ctx.Query("rows"); rowsStr != "" {
+		if v, err := strconv.Atoi(rowsStr); err == nil && v > 0 {
+			rows = v
+		}
+	}
+
 	// 如果只有一个凭证，直接连接；否则返回凭证列表
 	if len(keys) == 1 {
 		// 直接连接
-		if err := c.connectToInstance(conn, sessionID, userId, instanceId, keys[0]); err != nil {
+		if err := c.connectToInstance(conn, sessionID, userId, instanceId, keys[0], isAdmin, cols, rows); err != nil {
 			c.sendError(conn, "连接失败: "+err.Error())
 			return
 		}
@@ -186,6 +205,15 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 				c.sendError(conn, "凭证ID不能为空")
 				continue
 			}
+			// 使用 connect 消息中的终端尺寸（比查询参数更新）
+			connectCols := cols
+			connectRows := rows
+			if msg.Cols > 0 {
+				connectCols = msg.Cols
+			}
+			if msg.Rows > 0 {
+				connectRows = msg.Rows
+			}
 			var selectedKey *models.OpsKey
 			for _, key := range keys {
 				if key.ID == msg.KeyId {
@@ -197,7 +225,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 				c.sendError(conn, "无效的凭证ID")
 				continue
 			}
-			if err := c.connectToInstance(conn, sessionID, userId, instanceId, *selectedKey); err != nil {
+			if err := c.connectToInstance(conn, sessionID, userId, instanceId, *selectedKey, isAdmin, connectCols, connectRows); err != nil {
 				c.sendError(conn, "连接失败: "+err.Error())
 				continue
 			}
@@ -219,7 +247,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 }
 
 // connectToInstance 连接到远程主机
-func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID string, userId, instanceId int, key models.OpsKey) error {
+func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID string, userId, instanceId int, key models.OpsKey, isAdmin bool, cols, rows int) error {
 	// 验证主机是否存在
 	var instance models.OpsInstance
 	if err := models.DB.First(&instance, instanceId).Error; err != nil {
@@ -252,19 +280,11 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		log.Printf("创建会话记录失败: %v", err)
 	}
 
-	// 获取明文凭证
-	var credentials string
-	var err error
-	if key.Type == 1 {
-		// 密码类型，需要解密
-		credentials, err = utils.DecryptKey(key.Credentials)
-		if err != nil {
-			log.Printf("解密凭证失败: %v", err)
-			return errors.New("解密凭证失败")
-		}
-	} else {
-		// 密钥类型，直接使用
-		credentials = key.Credentials
+	// 获取明文凭证（密码和密钥都可能加密存储）
+	credentials, err := utils.DecryptKey(key.Credentials)
+	if err != nil {
+		log.Printf("解密凭证失败: %v", err)
+		return errors.New("解密凭证失败")
 	}
 
 	// 建立SSH连接
@@ -318,9 +338,13 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		return errors.New("获取标准输入失败: " + err.Error())
 	}
 
-	// 请求伪终端（默认大小 80x24）
-	rows := 24
-	cols := 80
+	// 请求伪终端（使用前端传递的终端尺寸，默认 80x24）
+	if cols <= 0 {
+		cols = 80
+	}
+	if rows <= 0 {
+		rows = 24
+	}
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
@@ -351,6 +375,7 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		Recorder:      recorder,
 		SessionRecord: sessionRecord,
 		WebSocketConn: conn, // 保存 WebSocket 连接引用
+		IsAdmin:       isAdmin,
 	}
 
 	sessionMutex.Lock()
@@ -453,13 +478,91 @@ func (c *WebSocketController) handleData(sessionID string, msg WebSocketMessage)
 	sshSession.mu.Lock()
 	defer sshSession.mu.Unlock()
 
-	// 注意：不记录输入数据，因为终端会自动回显用户输入
-	// SSH 服务器会将用户输入作为输出返回，我们在 readSSHOutput 中统一记录输出
-	// 这样可以避免重复记录（用户输入一次 + 回显一次 = 显示两次）
+	data := msg.Data
 
-	// 写入SSH输入
-	if _, err := sshSession.StdinPipe.Write([]byte(msg.Data)); err != nil {
-		log.Printf("写入SSH输入失败: %v", err)
+	// 如果数据包含 Escape 序列（方向键、Home、End 等），不进入buffer
+	if strings.Contains(data, "\x1b") {
+		if _, err := sshSession.StdinPipe.Write([]byte(data)); err != nil {
+			log.Printf("写入SSH输入失败: %v", err)
+		}
+		return
+	}
+
+	// 逐个字符处理
+	for i := 0; i < len(data); i++ {
+		ch := data[i]
+		switch ch {
+		case '\r', '\n':
+			// 回车/换行，提取完整命令并检查
+			cmd := strings.TrimSpace(sshSession.InputBuffer)
+			sshSession.InputBuffer = ""
+			if cmd == "" {
+				if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+					log.Printf("写入SSH输入失败: %v", err)
+				}
+				continue
+			}
+			// 检查高危指令
+			blocked, ruleName, description := instance.CheckCommand(cmd, sshSession.IsAdmin)
+			if blocked {
+				// 发送 Ctrl+C 取消当前输入
+				if _, err := sshSession.StdinPipe.Write([]byte{0x03}); err != nil {
+					log.Printf("写入SSH输入失败: %v", err)
+				}
+				// 发送警告到前端
+				warning := fmt.Sprintf("\r\n\x1b[31m[高危指令拦截] 命令 \"%s\" 已被系统阻止执行（规则：%s）\x1b[0m\r\n", cmd, ruleName)
+				if description != "" {
+					warning = fmt.Sprintf("\r\n\x1b[31m[高危指令拦截] 命令 \"%s\" 已被系统阻止执行（%s）\x1b[0m\r\n", cmd, description)
+				}
+				if err := sshSession.WebSocketConn.WriteJSON(WebSocketMessage{
+					Type: "blocked",
+					Data: warning,
+				}); err != nil {
+					log.Printf("发送拦截警告失败: %v", err)
+				}
+			} else {
+				if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+					log.Printf("写入SSH输入失败: %v", err)
+				}
+			}
+		case '\b', 0x7f:
+			// 退格键
+			if len(sshSession.InputBuffer) > 0 {
+				sshSession.InputBuffer = sshSession.InputBuffer[:len(sshSession.InputBuffer)-1]
+			}
+			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+				log.Printf("写入SSH输入失败: %v", err)
+			}
+		case 0x03:
+			// Ctrl+C，清空buffer
+			sshSession.InputBuffer = ""
+			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+				log.Printf("写入SSH输入失败: %v", err)
+			}
+		case 0x04:
+			// Ctrl+D
+			sshSession.InputBuffer = ""
+			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+				log.Printf("写入SSH输入失败: %v", err)
+			}
+		case 0x15:
+			// Ctrl+U，清空当前行
+			sshSession.InputBuffer = ""
+			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+				log.Printf("写入SSH输入失败: %v", err)
+			}
+		case '\t':
+			// Tab，忽略不进入buffer
+			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+				log.Printf("写入SSH输入失败: %v", err)
+			}
+		default:
+			// 普通字符，追加到buffer并发送给SSH
+			sshSession.InputBuffer += string(ch)
+			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
+				log.Printf("写入SSH输入失败: %v", err)
+			}
+		}
 	}
 }
 

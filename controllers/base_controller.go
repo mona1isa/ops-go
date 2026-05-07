@@ -11,8 +11,16 @@ type BaseController struct {
 }
 
 const (
+	// AdminUserId 系统管理员用户ID（内置超级管理员）
 	AdminUserId = 1
 )
+
+// IsAdminUserByName 检查用户名是否为系统管理员
+// 注意：此函数仅用于简单的用户名检查，正式权限判断应使用用户ID
+func IsAdminUserByName(userName string) bool {
+	// 保留 "admin" 作为兼容性检查，但主要判断应基于 ID
+	return userName == "admin"
+}
 
 type PageRequest struct {
 	PageNum  int `json:"pageNum"`

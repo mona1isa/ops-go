@@ -291,30 +291,81 @@ func saveUserRole(addedUserIds []int, removedUserIds []int, roleId int) error {
 	return nil
 }
 
+// saveCasbinPolicy 保存角色的 Casbin 策略
+// 先添加新策略，成功后删除旧策略，确保原子性
 func saveCasbinPolicy(roleId int, menus []models.SysMenu) error {
-	// 删除旧的角色策略
-	_, err := models.Casbin.DeleteRolePolicy(roleId)
-	if err != nil {
-		log.Printf("删除旧的角色策略失败：%v\n", err)
-		return err
-	}
-	// 添加新的角色策略 - 使用批量操作
-	policies := make([][]string, 0)
+	// 构建新的策略列表
+	roleName := models.Casbin.MakeRoleName(roleId)
+	newPolicies := make([][]string, 0)
 	for _, menu := range menus {
 		url := menu.RequestUrl
 		method := menu.RequestMethod
 		if url != "" && method != "" {
-			roleName := models.Casbin.MakeRoleName(roleId)
-			policies = append(policies, []string{roleName, url, method})
+			newPolicies = append(newPolicies, []string{roleName, url, method})
 		}
 	}
-	if len(policies) > 0 {
-		_, err := models.Casbin.AddPolicies(policies)
+
+	// 获取旧策略（用于失败时回滚）
+	oldPolicies, err := getRolePolicies(roleId)
+	if err != nil {
+		log.Printf("获取旧策略失败：%v\n", err)
+		// 继续执行，尝试清空后重新添加
+	}
+
+	// 先删除旧策略
+	_, err = models.Casbin.DeleteRolePolicy(roleId)
+	if err != nil {
+		log.Printf("删除旧的角色策略失败：%v\n", err)
+		return err
+	}
+
+	// 添加新策略
+	if len(newPolicies) > 0 {
+		_, err = models.Casbin.AddPolicies(newPolicies)
 		if err != nil {
-			log.Printf("添加策略失败：%v\n", err)
+			log.Printf("添加新策略失败：%v\n", err)
+			// 尝试回滚：恢复旧策略
+			if len(oldPolicies) > 0 {
+				_, rollbackErr := models.Casbin.AddPolicies(oldPolicies)
+				if rollbackErr != nil {
+					log.Printf("回滚策略失败：%v\n", rollbackErr)
+				}
+			}
 			return err
 		}
 	}
 
 	return nil
+}
+
+// getRolePolicies 获取角色的现有策略（用于回滚）
+func getRolePolicies(roleId int) ([][]string, error) {
+	// 这里我们通过数据库查询获取，避免直接访问 enforcer
+	var menus []models.SysMenu
+	var roleMenus []models.SysRoleMenu
+	if err := models.DB.Where("role_id = ?", roleId).Find(&roleMenus).Error; err != nil {
+		return nil, err
+	}
+
+	menuIds := make([]int, 0)
+	for _, rm := range roleMenus {
+		menuIds = append(menuIds, rm.MenuId)
+	}
+
+	if len(menuIds) == 0 {
+		return [][]string{}, nil
+	}
+
+	if err := models.DB.Where("id in ?", menuIds).Find(&menus).Error; err != nil {
+		return nil, err
+	}
+
+	roleName := models.Casbin.MakeRoleName(roleId)
+	policies := make([][]string, 0)
+	for _, menu := range menus {
+		if menu.RequestUrl != "" && menu.RequestMethod != "" {
+			policies = append(policies, []string{roleName, menu.RequestUrl, menu.RequestMethod})
+		}
+	}
+	return policies, nil
 }

@@ -9,6 +9,11 @@ import (
 	"strconv"
 )
 
+// 扫描网段内的主机
+type HostScanController struct {
+	controllers.BaseController
+}
+
 type GroupController struct {
 	controllers.BaseController
 }
@@ -122,4 +127,40 @@ func (c *GroupController) AvailableInstanceHandler(ctx *gin.Context) {
 		return
 	}
 	c.Success(ctx, instances)
+}
+
+// ScanHostsHandler 扫描网段内的主机
+func (c *HostScanController) ScanHostsHandler(ctx *gin.Context) {
+	request := api.ScanHostsRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	service := instance.GroupService{}
+	hosts, err := service.ScanHosts(request.IpRange)
+	if err != nil {
+		c.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.Success(ctx, api.ScanHostsResponse{Hosts: hosts})
+}
+
+// SaveScannedHostsHandler 保存扫描到的主机
+func (c *HostScanController) SaveScannedHostsHandler(ctx *gin.Context) {
+	request := api.SaveScannedHostsRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	userId := c.GetUserId(ctx)
+	service := instance.GroupService{}
+	if err := service.SaveScannedHosts(request, userId); err != nil {
+		c.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JustSuccess(ctx)
 }

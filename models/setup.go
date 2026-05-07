@@ -39,6 +39,7 @@ func InitDB() {
 		&OpsInstanceGroup{},
 		&OpsUserInstanceAuth{},
 		&OpsUserInstanceKeyAuth{},
+		&OpsDangerousCommand{},
 	}
 
 	for _, table := range tables {
@@ -52,5 +53,7 @@ func InitDB() {
 
 func InitCasbin() {
 	Casbin = &CasbinHandler{}
-	Casbin.init()
+	// 初始化将在第一次使用时自动完成
+	// 可以通过 Casbin.IsInitialized() 检查状态
+	// 通过 Casbin.GetInitError() 获取错误信息
 }

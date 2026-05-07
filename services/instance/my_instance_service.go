@@ -36,12 +36,20 @@ func (my *MyInstance) GetMyInstance() (map[string]any, error) {
 	if isAdmin {
 		// 分页查询所有的主机信息
 		var pageInstances []*models.OpsInstance
-		if err := models.DB.Where("status = ? and del_flag = ?", 1, 0).Offset((my.PageNum - 1) * my.PageSize).Limit(my.PageSize).Find(&pageInstances).Error; err != nil {
+		db := models.DB.Where("status = ? and del_flag = ?", 1, 0)
+		if my.Name != "" {
+			db = db.Where("name like ?", "%"+my.Name+"%")
+		}
+		if err := db.Offset((my.PageNum - 1) * my.PageSize).Limit(my.PageSize).Find(&pageInstances).Error; err != nil {
 			return result, errors.New("查询主机信息失败")
 		}
 		// 查询总数
 		var total int64
-		if err := models.DB.Model(&models.OpsInstance{}).Where("status = ? and del_flag = ?", 1, 0).Count(&total).Error; err != nil {
+		countDb := models.DB.Model(&models.OpsInstance{}).Where("status = ? and del_flag = ?", 1, 0)
+		if my.Name != "" {
+			countDb = countDb.Where("name like ?", "%"+my.Name+"%")
+		}
+		if err := countDb.Count(&total).Error; err != nil {
 			return result, errors.New("查询主机信息失败")
 		}
 		// 查询主机关联的凭证
@@ -92,13 +100,21 @@ func (my *MyInstance) GetMyInstance() (map[string]any, error) {
 
 		// 分页查询主机信息
 		var pageInstances []*models.OpsInstance
-		if err := models.DB.Where("id IN (?) AND status = ? AND del_flag = ?", authInstanceIds, 1, 0).Offset((my.PageNum - 1) * my.PageSize).Limit(my.PageSize).Find(&pageInstances).Error; err != nil {
+		db := models.DB.Where("id IN (?) AND status = ? AND del_flag = ?", authInstanceIds, 1, 0)
+		if my.Name != "" {
+			db = db.Where("name like ?", "%"+my.Name+"%")
+		}
+		if err := db.Offset((my.PageNum - 1) * my.PageSize).Limit(my.PageSize).Find(&pageInstances).Error; err != nil {
 			log.Println("查询主机信息失败，Error=", err)
 			return result, errors.New("查询主机信息失败")
 		}
 		// 查询总数
 		var total int64
-		if err := models.DB.Model(&models.OpsInstance{}).Where("id IN (?) AND status = ? AND del_flag = ?", authInstanceIds, 1, 0).Count(&total).Error; err != nil {
+		countDb := models.DB.Model(&models.OpsInstance{}).Where("id IN (?) AND status = ? AND del_flag = ?", authInstanceIds, 1, 0)
+		if my.Name != "" {
+			countDb = countDb.Where("name like ?", "%"+my.Name+"%")
+		}
+		if err := countDb.Count(&total).Error; err != nil {
 			log.Println("查询主机信息失败，Error=", err)
 			return result, errors.New("查询主机信息失败")
 		}

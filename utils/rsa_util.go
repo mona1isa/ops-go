@@ -1,13 +1,17 @@
 package utils
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"io"
 	"log"
+	"strings"
 )
 
 var PrivateKey = `
@@ -216,13 +220,67 @@ func ParsePublicKeyFromPEM(pemData string) (*rsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-// DecryptKey 解密登录凭证
+// DecryptKey 解密登录凭证（兼容旧版纯 RSA 和新版 AES+RSA 混合加密）
 func DecryptKey(encryptedKey string) (key string, err error) {
 	// 如果是空字符串，直接返回
 	if encryptedKey == "" {
 		return "", nil
 	}
-	// 判断是否是Base64编码的加密数据
+
+	// 检查是否是新格式（混合加密，包含 $ 分隔符）
+	if strings.Contains(encryptedKey, "$") {
+		parts := strings.SplitN(encryptedKey, "$", 2)
+		if len(parts) != 2 {
+			return "", errors.New("无效的加密格式")
+		}
+
+		encryptedAESKey, err := base64.StdEncoding.DecodeString(parts[0])
+		if err != nil {
+			log.Println("解码 AES 密钥失败：", err)
+			return "", errors.New("解码失败")
+		}
+		ciphertext, err := base64.StdEncoding.DecodeString(parts[1])
+		if err != nil {
+			log.Println("解码密文失败：", err)
+			return "", errors.New("解码失败")
+		}
+
+		privateKey, err := GetPrivateKey()
+		if err != nil {
+			log.Println("解析私钥失败：", err)
+			return "", errors.New("解析私钥失败")
+		}
+
+		aesKey, err := Decrypt(privateKey, encryptedAESKey)
+		if err != nil {
+			log.Println("解密 AES 密钥失败：", err)
+			return "", errors.New("解密失败")
+		}
+
+		block, err := aes.NewCipher(aesKey)
+		if err != nil {
+			log.Println("创建 AES Cipher 失败：", err)
+			return "", errors.New("解密失败")
+		}
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			log.Println("创建 GCM 失败：", err)
+			return "", errors.New("解密失败")
+		}
+		nonceSize := gcm.NonceSize()
+		if len(ciphertext) < nonceSize {
+			return "", errors.New("密文太短")
+		}
+		nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+		plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+		if err != nil {
+			log.Println("AES 解密失败：", err)
+			return "", errors.New("解密失败")
+		}
+		return string(plaintext), nil
+	}
+
+	// 旧格式兼容：纯 RSA 加密
 	if _, err := base64.StdEncoding.DecodeString(encryptedKey); err != nil {
 		// 不是Base64编码，说明已经是明文，直接返回
 		return encryptedKey, nil
@@ -240,26 +298,56 @@ func DecryptKey(encryptedKey string) (key string, err error) {
 	}
 	credentials, err := Decrypt(privateKey, encrptPwd)
 	if err != nil {
-		log.Println("登录凭证解密失败：", err)
-		return "", errors.New("登录凭证解密失败")
+		// RSA 解密失败，说明该字符串虽然符合 Base64 格式，但实际并非加密数据
+		// 直接返回原文，兼容明文存储的凭证
+		return encryptedKey, nil
 	}
 	return string(credentials), nil
 }
 
-// EncryptPassword 加密密码
+// EncryptPassword 加密凭证（支持任意长度，使用 AES+RSA 混合加密）
 func EncryptPassword(password string) (encrypted string, err error) {
 	if password == "" {
 		return "", nil
 	}
+
+	// 生成随机 AES-256 密钥
+	aesKey := make([]byte, 32)
+	if _, err := rand.Read(aesKey); err != nil {
+		log.Println("生成 AES 密钥失败：", err)
+		return "", errors.New("加密失败")
+	}
+
+	// AES-GCM 加密数据
+	block, err := aes.NewCipher(aesKey)
+	if err != nil {
+		log.Println("创建 AES Cipher 失败：", err)
+		return "", errors.New("加密失败")
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		log.Println("创建 GCM 失败：", err)
+		return "", errors.New("加密失败")
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		log.Println("生成 nonce 失败：", err)
+		return "", errors.New("加密失败")
+	}
+	ciphertext := gcm.Seal(nonce, nonce, []byte(password), nil)
+
+	// RSA 加密 AES 密钥
 	publicKey, err := GetPublicKey()
 	if err != nil {
 		log.Println("获取公钥失败：", err)
 		return "", errors.New("获取公钥失败")
 	}
-	encryptedBytes, err := Encrypt(publicKey, []byte(password))
+	encryptedAESKey, err := Encrypt(publicKey, aesKey)
 	if err != nil {
-		log.Println("加密失败：", err)
+		log.Println("加密 AES 密钥失败：", err)
 		return "", errors.New("加密失败")
 	}
-	return base64.StdEncoding.EncodeToString(encryptedBytes), nil
+
+	// 组合：base64(RSA加密后的AES密钥) + "$" + base64(AES密文)
+	return base64.StdEncoding.EncodeToString(encryptedAESKey) + "$" + base64.StdEncoding.EncodeToString(ciphertext), nil
 }
