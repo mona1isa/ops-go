@@ -162,10 +162,24 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 
 	isAdmin := userId == controllers.AdminUserId
 
+	// 从查询参数读取终端尺寸
+	cols := 80
+	rows := 24
+	if colsStr := ctx.Query("cols"); colsStr != "" {
+		if v, err := strconv.Atoi(colsStr); err == nil && v > 0 {
+			cols = v
+		}
+	}
+	if rowsStr := ctx.Query("rows"); rowsStr != "" {
+		if v, err := strconv.Atoi(rowsStr); err == nil && v > 0 {
+			rows = v
+		}
+	}
+
 	// 如果只有一个凭证，直接连接；否则返回凭证列表
 	if len(keys) == 1 {
 		// 直接连接
-		if err := c.connectToInstance(conn, sessionID, userId, instanceId, keys[0], isAdmin); err != nil {
+		if err := c.connectToInstance(conn, sessionID, userId, instanceId, keys[0], isAdmin, cols, rows); err != nil {
 			c.sendError(conn, "连接失败: "+err.Error())
 			return
 		}
@@ -191,6 +205,15 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 				c.sendError(conn, "凭证ID不能为空")
 				continue
 			}
+			// 使用 connect 消息中的终端尺寸（比查询参数更新）
+			connectCols := cols
+			connectRows := rows
+			if msg.Cols > 0 {
+				connectCols = msg.Cols
+			}
+			if msg.Rows > 0 {
+				connectRows = msg.Rows
+			}
 			var selectedKey *models.OpsKey
 			for _, key := range keys {
 				if key.ID == msg.KeyId {
@@ -202,7 +225,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 				c.sendError(conn, "无效的凭证ID")
 				continue
 			}
-			if err := c.connectToInstance(conn, sessionID, userId, instanceId, *selectedKey, isAdmin); err != nil {
+			if err := c.connectToInstance(conn, sessionID, userId, instanceId, *selectedKey, isAdmin, connectCols, connectRows); err != nil {
 				c.sendError(conn, "连接失败: "+err.Error())
 				continue
 			}
@@ -224,7 +247,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 }
 
 // connectToInstance 连接到远程主机
-func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID string, userId, instanceId int, key models.OpsKey, isAdmin bool) error {
+func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID string, userId, instanceId int, key models.OpsKey, isAdmin bool, cols, rows int) error {
 	// 验证主机是否存在
 	var instance models.OpsInstance
 	if err := models.DB.First(&instance, instanceId).Error; err != nil {
@@ -315,9 +338,13 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		return errors.New("获取标准输入失败: " + err.Error())
 	}
 
-	// 请求伪终端（默认大小 80x24）
-	rows := 24
-	cols := 80
+	// 请求伪终端（使用前端传递的终端尺寸，默认 80x24）
+	if cols <= 0 {
+		cols = 80
+	}
+	if rows <= 0 {
+		rows = 24
+	}
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
