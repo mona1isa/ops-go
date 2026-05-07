@@ -175,11 +175,11 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 
 ```bash
 # 克隆后端项目
-git clone https://github.com/zhany/ops-go.git
+git clone https://github.com/mona1isa/ops-go.git
 cd ops-go
 
 # 克隆前端项目（与后端同级目录）
-git clone https://github.com/zhany/ops-go-ui.git
+git clone https://github.com/mona1isa/ops-go-ui.git
 ```
 
 ### 2. 数据库准备
@@ -694,7 +694,7 @@ location /ws {
 
 ## 联系方式
 
-- Issues: [GitHub Issues](https://github.com/zhany/ops-go/issues)
+- Issues: [GitHub Issues](https://github.com/mona1isa/ops-go/issues)
 - 作者: Zhany_v
 
 ---
