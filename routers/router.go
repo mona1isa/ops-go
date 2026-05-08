@@ -26,6 +26,9 @@ func Init() *gin.Engine {
 	sessionRecordRouter := &SessionRecordRouter{}
 	activeSessionRouter := &ActiveSessionRouter{}
 	dangerousCommandRouter := &DangerousCommandRouter{}
+	taskTemplateRouter := &TaskTemplateRouter{}
+	taskPipelineRouter := &TaskPipelineRouter{}
+	taskExecutionRouter := &TaskExecutionRouter{}
 
 	userRouter.Setup(api)
 	captchaRouter.Setup(api)
@@ -40,5 +43,8 @@ func Init() *gin.Engine {
 	sessionRecordRouter.Setup(api)
 	activeSessionRouter.Setup(api)
 	dangerousCommandRouter.Setup(api)
+	taskTemplateRouter.Setup(api)
+	taskPipelineRouter.Setup(api)
+	taskExecutionRouter.Setup(api)
 	return r
 }

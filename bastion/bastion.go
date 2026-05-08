@@ -48,6 +48,75 @@ var globalSessionManager = &SessionManager{
 	sessions: make(map[string]*ActiveSession),
 }
 
+// --------- IP登录失败次数限制 ---------
+const (
+	maxLoginFails    = 10                   // 最大连续失败次数
+	loginBanDuration = 30 * time.Minute     // 封禁时长
+	loginFailWindow  = 10 * time.Minute     // 失败计数窗口
+)
+
+type loginFailRecord struct {
+	count    int
+	lastFail time.Time
+	banned   bool
+	banUntil time.Time
+}
+
+var (
+	loginFailMap   = make(map[string]*loginFailRecord)
+	loginFailMutex sync.Mutex
+)
+
+// isIPBanned checks if the IP is currently banned due to too many login failures.
+func isIPBanned(ip string) bool {
+	loginFailMutex.Lock()
+	defer loginFailMutex.Unlock()
+
+	rec, ok := loginFailMap[ip]
+	if !ok {
+		return false
+	}
+	if rec.banned {
+		if time.Now().Before(rec.banUntil) {
+			return true
+		}
+		// 封禁已过期，清除记录
+		delete(loginFailMap, ip)
+		return false
+	}
+	return false
+}
+
+// recordLoginFail records a login failure for the given IP.
+// Returns true if the IP should be banned (reached max failures).
+func recordLoginFail(ip string) bool {
+	loginFailMutex.Lock()
+	defer loginFailMutex.Unlock()
+
+	rec, ok := loginFailMap[ip]
+	if !ok || time.Since(rec.lastFail) > loginFailWindow {
+		// 首次失败或超出窗口期，重新计数
+		rec = &loginFailRecord{count: 0}
+		loginFailMap[ip] = rec
+	}
+	rec.count++
+	rec.lastFail = time.Now()
+
+	if rec.count >= maxLoginFails {
+		rec.banned = true
+		rec.banUntil = time.Now().Add(loginBanDuration)
+		return true
+	}
+	return false
+}
+
+// clearLoginFails clears the failure record for the given IP after a successful login.
+func clearLoginFails(ip string) {
+	loginFailMutex.Lock()
+	defer loginFailMutex.Unlock()
+	delete(loginFailMap, ip)
+}
+
 // GetGlobalSessionManager 获取全局会话管理器（导出给外部使用）
 func GetGlobalSessionManager() *SessionManager {
 	return globalSessionManager
@@ -969,15 +1038,35 @@ func (h *HostStore) FindByIP(ip string) *Host {
 // --------- 自定义认证 ---------
 func passwordAuth(ctx gliderssh.Context, pass string) bool {
 	user := ctx.User()
+	clientIP, _, _ := net.SplitHostPort(ctx.RemoteAddr().String())
+
+	// 检查IP是否被封禁
+	if isIPBanned(clientIP) {
+		log.Printf("堡垒机拒绝访问 - IP: %s, 用户: %s, 密码: %s, 原因: 连续登录失败超过%d次,已被封禁", clientIP, user, pass, maxLoginFails)
+		return false
+	}
+
+	if !utils.IsChinaIP(clientIP) {
+		region, _ := utils.GetRegion(clientIP)
+		log.Printf("堡垒机拒绝访问 - IP: %s, 用户: %s, 密码: %s, 原因: 非中国IP(%s)", clientIP, user, pass, region)
+		return false
+	}
+
 	var sysUser models.SysUser
 	if err := models.DB.Where("user_name = ? AND status = '1'", user).First(&sysUser).Error; err != nil {
-		log.Printf("用户认证失败: %s, 错误: %v", user, err)
+		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 密码: %s, 原因: 用户不存在或已禁用", clientIP, user, pass)
+		recordLoginFail(clientIP)
 		return false
 	}
 	if !checkPassword(pass, sysUser.Password) {
-		log.Printf("用户认证失败: %s, 密码错误", user)
+		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 密码: %s, 原因: 密码错误", clientIP, user, pass)
+		if banned := recordLoginFail(clientIP); banned {
+			log.Printf("堡垒机IP封禁 - IP: %s, 连续登录失败超过%d次, 封禁%v", clientIP, maxLoginFails, loginBanDuration)
+		}
 		return false
 	}
+	log.Printf("堡垒机认证成功 - IP: %s, 用户: %s", clientIP, user)
+	clearLoginFails(clientIP)
 	return true
 }
 
