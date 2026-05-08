@@ -40,6 +40,12 @@ func InitDB() {
 		&OpsUserInstanceAuth{},
 		&OpsUserInstanceKeyAuth{},
 		&OpsDangerousCommand{},
+		&OpsTaskTemplate{},
+		&OpsTaskPipeline{},
+		&OpsPipelineStep{},
+		&OpsTaskExecution{},
+		&OpsExecutionHost{},
+		&OpsStepExecution{},
 	}
 
 	for _, table := range tables {

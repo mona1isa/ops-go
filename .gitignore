@@ -1,0 +1,17 @@
+# Build output
+ops-go
+
+# Environment config
+.env
+
+# SSH host key
+cmd/bastion/hostkey.pem
+
+# Session recordings
+recordings/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
