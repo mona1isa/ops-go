@@ -100,6 +100,35 @@ func (s *InstanceService) ChangeStatus(request api.ChangeStatusRequest) (err err
 	return nil
 }
 
+// ListInstance 查询实例列表（不分页）
+func (s *InstanceService) ListInstance(request api.ListInstanceRequest) ([]models.OpsInstance, error) {
+	db := models.DB.Where("del_flag = ?", 0)
+	if request.Name != "" {
+		db = db.Where("name like ?", "%"+request.Name+"%")
+	}
+	if request.Status != "" {
+		db = db.Where("status = ?", request.Status)
+	}
+
+	var instances []models.OpsInstance
+	if err := db.Find(&instances).Error; err != nil {
+		log.Println("查询主机列表异常：", err)
+		return nil, errors.New("查询主机列表失败")
+	}
+
+	// 查询主机绑定的密钥
+	for i := range instances {
+		instance := &instances[i]
+		var opsKeys []models.OpsKey
+		if err := models.DB.Table("ops_key").Select("id, name, type, protocol").Joins("join ops_instance_keys on ops_key.id = ops_instance_keys.key_id").Where("ops_instance_keys.instance_id = ?", instance.ID).Find(&opsKeys).Error; err != nil {
+			return instances, errors.New("查询主机列表失败")
+		}
+		instance.BindingKeys = opsKeys
+	}
+
+	return instances, nil
+}
+
 // PageInstance 分页查询实例
 func (s *InstanceService) PageInstance(request api.PageInstanceRequest) (models.PageResult[models.OpsInstance], error) {
 	pageNum := request.PageNum

@@ -13,12 +13,32 @@ type TaskPipelineService struct{}
 
 // List 分页查询编排
 func (s *TaskPipelineService) List(pageNum, pageSize int, name string) (models.PageResult[models.OpsTaskPipeline], error) {
-	return models.Paginate[models.OpsTaskPipeline](models.DB, pageNum, pageSize, func(db *gorm.DB) *gorm.DB {
+	result, err := models.Paginate[models.OpsTaskPipeline](models.DB, pageNum, pageSize, func(db *gorm.DB) *gorm.DB {
 		if name != "" {
 			db = db.Where("name like ?", "%"+name+"%")
 		}
 		return db.Where("del_flag = ?", 0).Order("id desc")
 	})
+	if err != nil {
+		return result, err
+	}
+	// 批量加载步骤数据
+	if len(result.Data) > 0 {
+		ids := make([]int, len(result.Data))
+		for i, p := range result.Data {
+			ids[i] = p.ID
+		}
+		var steps []models.OpsPipelineStep
+		models.DB.Where("pipeline_id IN ? AND del_flag = ?", ids, 0).Order("step_order asc").Find(&steps)
+		stepMap := make(map[int][]models.OpsPipelineStep)
+		for _, step := range steps {
+			stepMap[step.PipelineId] = append(stepMap[step.PipelineId], step)
+		}
+		for i := range result.Data {
+			result.Data[i].Steps = stepMap[result.Data[i].ID]
+		}
+	}
+	return result, nil
 }
 
 // GetByID 根据ID查询编排（含步骤）

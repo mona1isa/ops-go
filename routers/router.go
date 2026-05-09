@@ -29,6 +29,7 @@ func Init() *gin.Engine {
 	taskTemplateRouter := &TaskTemplateRouter{}
 	taskPipelineRouter := &TaskPipelineRouter{}
 	taskExecutionRouter := &TaskExecutionRouter{}
+	scriptRouter := &ScriptRouter{}
 
 	userRouter.Setup(api)
 	captchaRouter.Setup(api)
@@ -46,5 +47,6 @@ func Init() *gin.Engine {
 	taskTemplateRouter.Setup(api)
 	taskPipelineRouter.Setup(api)
 	taskExecutionRouter.Setup(api)
+	scriptRouter.Setup(api)
 	return r
 }

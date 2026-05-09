@@ -54,7 +54,7 @@ func (s *TaskExecutionService) GetHostResult(executionId uint64, instanceId int)
 }
 
 // CreateExecution 创建执行记录
-func (s *TaskExecutionService) CreateExecution(name string, execType int8, sourceId int, userId int, userName string, instanceIds []int, keyId int, timeout int) (*models.OpsTaskExecution, error) {
+func (s *TaskExecutionService) CreateExecution(name string, execType int8, sourceId int, userId int, userName string, instanceIds []int, keyId int, timeout int, content string, scriptLang string, srcPath string, destPath string) (*models.OpsTaskExecution, error) {
 	if len(instanceIds) == 0 {
 		return nil, errors.New("目标主机不能为空")
 	}
@@ -73,6 +73,10 @@ func (s *TaskExecutionService) CreateExecution(name string, execType int8, sourc
 		Status:      models.ExecStatusPending,
 		TotalHosts:  len(instanceIds),
 		Timeout:     timeout,
+		Content:      content,
+		ScriptLang:  scriptLang,
+		SrcPath:     srcPath,
+		DestPath:    destPath,
 	}
 	if err := models.DB.Create(execution).Error; err != nil {
 		return nil, errors.New("创建执行记录失败")

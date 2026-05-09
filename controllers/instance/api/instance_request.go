@@ -42,6 +42,11 @@ type InstanceKeyUnbindingRequest struct {
 	KeyIds     []int `json:"keyIds" required:"true"`
 }
 
+type ListInstanceRequest struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
 type OsTypeRequest struct {
 	OsType string `json:"osType"`
 }

@@ -46,6 +46,7 @@ func InitDB() {
 		&OpsTaskExecution{},
 		&OpsExecutionHost{},
 		&OpsStepExecution{},
+		&OpsScript{},
 	}
 
 	for _, table := range tables {

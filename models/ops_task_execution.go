@@ -35,6 +35,10 @@ type OpsTaskExecution struct {
 	SuccessHosts int        `gorm:"type:int;default:0;comment:成功主机数" json:"successHosts"`
 	FailHosts    int        `gorm:"type:int;default:0;comment:失败主机数" json:"failHosts"`
 	Timeout      int        `gorm:"type:int;default:300;comment:超时时间(秒)" json:"timeout"`
+	Content      string     `gorm:"type:text;comment:执行内容(快速执行时保存)" json:"content"`
+	ScriptLang   string     `gorm:"type:varchar(32);comment:脚本语言" json:"scriptLang"`
+	SrcPath      string     `gorm:"type:varchar(512);comment:源文件路径" json:"srcPath"`
+	DestPath     string     `gorm:"type:varchar(512);comment:目标文件路径" json:"destPath"`
 	StartedAt    *time.Time `gorm:"comment:开始时间" json:"startedAt"`
 	FinishedAt   *time.Time `gorm:"comment:结束时间" json:"finishedAt"`
 	CreatedAt    time.Time  `json:"createdAt"`

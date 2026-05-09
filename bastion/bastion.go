@@ -241,12 +241,34 @@ func Init() {
 	gliderssh.Handle(sessionHandler)
 
 	log.Printf("Bastion SSH server listening on :2222")
-	log.Fatal(gliderssh.ListenAndServe(
-		":2222",
-		nil,
-		gliderssh.HostKeyPEM(pem),
-		gliderssh.PasswordAuth(passwordAuth),
-	))
+
+	signer, err := sshclient.ParsePrivateKey(pem)
+	if err != nil {
+		log.Fatalf("解析主机密钥失败: %v", err)
+	}
+
+	srv := &gliderssh.Server{
+		Addr:    ":2222",
+		Handler: sessionHandler,
+		PasswordHandler: passwordAuth,
+		ConnCallback: func(ctx gliderssh.Context, conn net.Conn) net.Conn {
+			clientIP, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+			if isIPBanned(clientIP) {
+				log.Printf("堡垒机拒绝连接 - IP: %s, 原因: 连续登录失败超过%d次,已被封禁", clientIP, maxLoginFails)
+				conn.Close()
+				return nil
+			}
+			return conn
+		},
+		ServerConfigCallback: func(ctx gliderssh.Context) *sshclient.ServerConfig {
+			return &sshclient.ServerConfig{
+				MaxAuthTries: 3,
+			}
+		},
+	}
+	srv.AddHostKey(signer)
+
+	log.Fatal(srv.ListenAndServe())
 }
 
 // --------- 会话处理与交互菜单 ---------
