@@ -64,7 +64,7 @@ func RunExecution(executionId uint64) {
 	}
 
 	// 并发执行
-	runHostsConcurrent(executionId, hosts, taskType, content, scriptLang, srcPath, destPath, execution.Timeout)
+	runHostsConcurrent(executionId, 0, hosts, taskType, content, scriptLang, srcPath, destPath, execution.Timeout)
 
 	// 汇总结果
 	if err := service.FinishExecution(executionId); err != nil {
@@ -101,8 +101,8 @@ func RunPipelineExecution(executionId uint64) {
 		return
 	}
 
-	// 加载主机列表
-	hosts, err := service.GetExecutionHosts(executionId)
+	// 加载模板主机列表（编排执行时创建的主机记录作为模板）
+	templateHosts, err := service.GetExecutionHosts(executionId)
 	if err != nil {
 		log.Printf("[TaskEngine] 加载主机列表失败 executionId=%d: %v", executionId, err)
 		return
@@ -112,8 +112,14 @@ func RunPipelineExecution(executionId uint64) {
 	allAborted := false
 	for _, step := range steps {
 		if allAborted {
-			// 标记该步骤的主机为跳过
-			markStepHostsSkipped(executionId, step.ID)
+			// 创建跳过的步骤执行记录
+			stepExec := createStepExecution(executionId, step)
+			markStepHostsSkipped(executionId, stepExec.ID)
+			now := time.Now()
+			models.DB.Model(&models.OpsStepExecution{}).Where("id = ?", stepExec.ID).Updates(map[string]interface{}{
+				"status":      models.StepStatusSkipped,
+				"finished_at": &now,
+			})
 			continue
 		}
 
@@ -121,6 +127,13 @@ func RunPipelineExecution(executionId uint64) {
 		tpl := loadTemplate(step.TemplateId)
 		if tpl == nil {
 			log.Printf("[TaskEngine] 步骤模板不存在 stepId=%d templateId=%d", step.ID, step.TemplateId)
+			// 创建失败的步骤执行记录
+			stepExec := createStepExecution(executionId, step)
+			now := time.Now()
+			models.DB.Model(&models.OpsStepExecution{}).Where("id = ?", stepExec.ID).Updates(map[string]interface{}{
+				"status":      models.StepStatusFail,
+				"finished_at": &now,
+			})
 			if step.OnFailure == models.OnFailureAbort {
 				allAborted = true
 			}
@@ -130,14 +143,33 @@ func RunPipelineExecution(executionId uint64) {
 		// 创建步骤执行记录
 		stepExec := createStepExecution(executionId, step)
 
+		// 为该步骤克隆主机执行记录
+		stepHosts, err := service.CloneStepExecutionHosts(executionId, stepExec.ID, templateHosts)
+		if err != nil {
+			log.Printf("[TaskEngine] 克隆主机记录失败 stepExecId=%d: %v", stepExec.ID, err)
+			now := time.Now()
+			models.DB.Model(&models.OpsStepExecution{}).Where("id = ?", stepExec.ID).Updates(map[string]interface{}{
+				"status":      models.StepStatusFail,
+				"finished_at": &now,
+			})
+			if step.OnFailure == models.OnFailureAbort {
+				allAborted = true
+			}
+			continue
+		}
+
 		// 执行该步骤
-		runHostsConcurrent(executionId, hosts, tpl.Type, tpl.Content, tpl.ScriptLang, tpl.SrcPath, tpl.DestPath, execution.Timeout)
+		runHostsConcurrent(executionId, stepExec.ID, stepHosts, tpl.Type, tpl.Content, tpl.ScriptLang, tpl.SrcPath, tpl.DestPath, execution.Timeout)
 
 		// 检查步骤执行结果
 		abort := checkStepResult(executionId, stepExec.ID)
 		now := time.Now()
+		stepStatus := models.StepStatusSuccess
+		if abort {
+			stepStatus = models.StepStatusFail
+		}
 		models.DB.Model(&models.OpsStepExecution{}).Where("id = ?", stepExec.ID).Updates(map[string]interface{}{
-			"status":      models.StepStatusSuccess,
+			"status":      stepStatus,
 			"finished_at": &now,
 		})
 
@@ -207,14 +239,14 @@ func checkStepResult(executionId uint64, stepExecId uint64) bool {
 }
 
 // markStepHostsSkipped 标记步骤相关的未完成主机为跳过
-func markStepHostsSkipped(executionId uint64, stepId int) {
+func markStepHostsSkipped(executionId uint64, stepExecId uint64) {
 	models.DB.Model(&models.OpsExecutionHost{}).
-		Where("execution_id = ? AND status IN ?", executionId, []int8{models.HostStatusPending, models.HostStatusRunning}).
+		Where("execution_id = ? AND step_exec_id = ? AND status IN ?", executionId, stepExecId, []int8{models.HostStatusPending, models.HostStatusRunning}).
 		Update("status", models.HostStatusSkipped)
 }
 
 // runHostsConcurrent 并发在多台主机上执行任务
-func runHostsConcurrent(executionId uint64, hosts []models.OpsExecutionHost, taskType int8, content string, scriptLang string, srcPath string, destPath string, timeout int) {
+func runHostsConcurrent(executionId uint64, stepExecId uint64, hosts []models.OpsExecutionHost, taskType int8, content string, scriptLang string, srcPath string, destPath string, timeout int) {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxConcurrentHosts)
 

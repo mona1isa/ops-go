@@ -172,6 +172,25 @@ func (c *TaskExecutionController) DetailHandler(ctx *gin.Context) {
 	// 同时获取主机结果
 	hosts, _ := service.GetExecutionHosts(request.ExecutionId)
 
+	// 编排执行额外返回步骤及每步的主机结果
+	if result.Type == models.ExecTypePipeline {
+		steps, _ := service.GetStepExecutions(request.ExecutionId)
+		var stepDetails []gin.H
+		for _, step := range steps {
+			stepHosts, _ := service.GetExecutionHostsByStepExecId(request.ExecutionId, step.ID)
+			stepDetails = append(stepDetails, gin.H{
+				"step":  step,
+				"hosts": stepHosts,
+			})
+		}
+		c.Success(ctx, gin.H{
+			"execution": result,
+			"hosts":     hosts,
+			"steps":     stepDetails,
+		})
+		return
+	}
+
 	c.Success(ctx, gin.H{
 		"execution": result,
 		"hosts":     hosts,

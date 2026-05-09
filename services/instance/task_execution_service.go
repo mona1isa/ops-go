@@ -167,7 +167,8 @@ func (s *TaskExecutionService) UpdateHostResult(hostId uint64, status int8, resu
 // FinishExecution 完成执行（汇总各主机结果）
 func (s *TaskExecutionService) FinishExecution(executionId uint64) error {
 	var hosts []models.OpsExecutionHost
-	models.DB.Where("execution_id = ?", executionId).Find(&hosts)
+	// 排除编排执行的模板主机记录（step_exec_id=0 且状态为 Pending 的是模板）
+	models.DB.Where("execution_id = ? AND NOT (step_exec_id = ? AND status = ?)", executionId, 0, models.HostStatusPending).Find(&hosts)
 
 	successCount := 0
 	failCount := 0
@@ -180,7 +181,7 @@ func (s *TaskExecutionService) FinishExecution(executionId uint64) error {
 	}
 
 	status := models.ExecStatusCompleted
-	if failCount == len(hosts) {
+	if len(hosts) > 0 && failCount == len(hosts) {
 		status = models.ExecStatusAllFail
 	} else if failCount > 0 {
 		status = models.ExecStatusPartialFail
@@ -223,6 +224,48 @@ func (s *TaskExecutionService) GetExecutionHosts(executionId uint64) ([]models.O
 		return nil, err
 	}
 	return hosts, nil
+}
+
+// GetExecutionHostsByStepExecId 获取某步骤的主机列表
+func (s *TaskExecutionService) GetExecutionHostsByStepExecId(executionId uint64, stepExecId uint64) ([]models.OpsExecutionHost, error) {
+	var hosts []models.OpsExecutionHost
+	if err := models.DB.Where("execution_id = ? AND step_exec_id = ?", executionId, stepExecId).Order("id asc").Find(&hosts).Error; err != nil {
+		return nil, err
+	}
+	return hosts, nil
+}
+
+// CloneStepExecutionHosts 为某个步骤克隆主机执行记录
+func (s *TaskExecutionService) CloneStepExecutionHosts(executionId uint64, stepExecId uint64, templateHosts []models.OpsExecutionHost) ([]models.OpsExecutionHost, error) {
+	var newHosts []models.OpsExecutionHost
+	for _, h := range templateHosts {
+		newHost := models.OpsExecutionHost{
+			ExecutionId:  executionId,
+			StepExecId:   stepExecId,
+			InstanceId:   h.InstanceId,
+			InstanceName: h.InstanceName,
+			InstanceIP:   h.InstanceIP,
+			KeyId:        h.KeyId,
+			KeyName:      h.KeyName,
+			KeyUser:      h.KeyUser,
+			Status:       models.HostStatusPending,
+		}
+		if err := models.DB.Create(&newHost).Error; err != nil {
+			log.Printf("克隆主机执行记录失败 hostId=%d: %v", h.ID, err)
+			continue
+		}
+		newHosts = append(newHosts, newHost)
+	}
+	return newHosts, nil
+}
+
+// GetStepExecutions 获取编排步骤执行列表
+func (s *TaskExecutionService) GetStepExecutions(executionId uint64) ([]models.OpsStepExecution, error) {
+	var steps []models.OpsStepExecution
+	if err := models.DB.Where("execution_id = ?", executionId).Order("id asc").Find(&steps).Error; err != nil {
+		return nil, err
+	}
+	return steps, nil
 }
 
 // ParseUserId 解析用户ID字符串
