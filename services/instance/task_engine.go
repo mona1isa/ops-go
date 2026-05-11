@@ -3,17 +3,16 @@ package instance
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/pkg/sftp"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/utils"
 	"golang.org/x/crypto/ssh"
@@ -332,6 +331,11 @@ func ExecuteOnHost(task ExecTask) (string, error) {
 		return "", fmt.Errorf("解密凭证失败: %w", err)
 	}
 
+	// 文件分发任务使用 scp 命令传输，无需建立 SSH 连接
+	if task.CommandType == models.TaskTypeFile {
+		return executeFileTransfer(ctx, task, credentials)
+	}
+
 	// 构建SSH认证
 	var authMethods []ssh.AuthMethod
 	if task.KeyType == 2 {
@@ -377,8 +381,6 @@ func ExecuteOnHost(task ExecTask) (string, error) {
 		return executeCommand(ctx, client, task.Content)
 	case models.TaskTypeScript:
 		return executeScript(ctx, client, task.Content, task.ScriptLang)
-	case models.TaskTypeFile:
-		return executeFileTransfer(ctx, client, task.SrcPath, task.DestPath)
 	default:
 		return "", fmt.Errorf("不支持的任务类型: %d", task.CommandType)
 	}
@@ -462,46 +464,102 @@ func executeScript(ctx context.Context, client *ssh.Client, scriptContent string
 	}
 }
 
-// executeFileTransfer 通过SFTP上传文件到远程主机
-func executeFileTransfer(ctx context.Context, client *ssh.Client, srcPath string, destPath string) (string, error) {
-	// 打开本地源文件
-	srcFile, err := os.Open(srcPath)
+// executeFileTransfer 通过 scp 命令将文件上传到远程主机
+func executeFileTransfer(ctx context.Context, task ExecTask, credentials string) (string, error) {
+	// 校验本地源文件
+	srcInfo, err := os.Stat(task.SrcPath)
 	if err != nil {
 		return "", fmt.Errorf("打开源文件失败: %w", err)
 	}
-	defer srcFile.Close()
-
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return "", fmt.Errorf("获取源文件信息失败: %w", err)
+	if srcInfo.IsDir() {
+		return "", fmt.Errorf("源文件不能是目录")
 	}
 
-	// 创建SFTP客户端
-	sftpClient, err := sftp.NewClient(client)
-	if err != nil {
-		return "", fmt.Errorf("创建SFTP客户端失败: %w", err)
-	}
-	defer sftpClient.Close()
-
-	// 确保远程目录存在
-	remoteDir := filepath.Dir(destPath)
-	sftpClient.MkdirAll(remoteDir)
-
-	// 创建远程文件
-	dstFile, err := sftpClient.Create(destPath)
-	if err != nil {
-		return "", fmt.Errorf("创建远程文件失败: %w", err)
-	}
-	defer dstFile.Close()
-
-	// 复制文件内容
-	written, err := io.Copy(dstFile, srcFile)
-	if err != nil {
-		return "", fmt.Errorf("传输文件失败: %w", err)
+	port := task.Port
+	if port == 0 {
+		port = 22
 	}
 
-	// 设置文件权限
-	dstFile.Chmod(srcInfo.Mode())
+	remoteTarget := fmt.Sprintf("%s@%s:%s", task.User, task.InstanceIP, task.DestPath)
+	remoteDir := filepath.Dir(task.DestPath)
 
-	return fmt.Sprintf("文件传输完成: %s -> %s (%d bytes)", srcPath, destPath, written), nil
+	var scpCmd *exec.Cmd
+
+	if task.KeyType == 2 {
+		// 密钥认证：将密钥写入临时文件
+		tmpKeyFile, err := os.CreateTemp("", "ops_scp_key_*.pem")
+		if err != nil {
+			return "", fmt.Errorf("创建临时密钥文件失败: %w", err)
+		}
+		defer os.Remove(tmpKeyFile.Name())
+
+		if err := os.WriteFile(tmpKeyFile.Name(), []byte(credentials), 0600); err != nil {
+			return "", fmt.Errorf("写入密钥文件失败: %w", err)
+		}
+
+		// 先创建远程目录（scp 不会自动创建目录）
+		mkdirCmd := exec.CommandContext(ctx, "ssh",
+			"-i", tmpKeyFile.Name(),
+			"-p", strconv.Itoa(port),
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "LogLevel=ERROR",
+			fmt.Sprintf("%s@%s", task.User, task.InstanceIP),
+			fmt.Sprintf("mkdir -p %q", remoteDir))
+		_ = mkdirCmd.Run()
+
+		// 执行 scp 传输
+		scpCmd = exec.CommandContext(ctx, "scp",
+			"-i", tmpKeyFile.Name(),
+			"-P", strconv.Itoa(port),
+			"-p",
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "LogLevel=ERROR",
+			task.SrcPath, remoteTarget)
+	} else {
+		// 密码认证：需要 sshpass 工具
+		if _, err := exec.LookPath("sshpass"); err != nil {
+			return "", fmt.Errorf("密码认证的文件分发需要安装 sshpass，请执行: apt-get install sshpass 或 yum install sshpass")
+		}
+
+		// 将密码写入临时文件（避免密码出现在进程列表中）
+		tmpPassFile, err := os.CreateTemp("", "ops_scp_pass_*")
+		if err != nil {
+			return "", fmt.Errorf("创建临时密码文件失败: %w", err)
+		}
+		defer os.Remove(tmpPassFile.Name())
+
+		if err := os.WriteFile(tmpPassFile.Name(), []byte(credentials), 0600); err != nil {
+			return "", fmt.Errorf("写入密码文件失败: %w", err)
+		}
+
+		// 先创建远程目录
+		mkdirCmd := exec.CommandContext(ctx, "sshpass", "-f", tmpPassFile.Name(),
+			"ssh",
+			"-p", strconv.Itoa(port),
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "LogLevel=ERROR",
+			fmt.Sprintf("%s@%s", task.User, task.InstanceIP),
+			fmt.Sprintf("mkdir -p %q", remoteDir))
+		_ = mkdirCmd.Run()
+
+		// 执行 scp 传输
+		scpCmd = exec.CommandContext(ctx, "sshpass", "-f", tmpPassFile.Name(),
+			"scp",
+			"-P", strconv.Itoa(port),
+			"-p",
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "LogLevel=ERROR",
+			task.SrcPath, remoteTarget)
+	}
+
+	output, err := scpCmd.CombinedOutput()
+	if err != nil {
+		return string(output), fmt.Errorf("scp 传输失败: %w", err)
+	}
+
+	return fmt.Sprintf("文件传输完成: %s -> %s (%d bytes)", task.SrcPath, task.DestPath, srcInfo.Size()), nil
 }
