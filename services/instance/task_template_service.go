@@ -95,6 +95,8 @@ func InitTaskMenu() {
 	var count int64
 	models.DB.Model(&models.SysMenu{}).Where("name = ? AND del_flag = ?", "任务编排", "0").Count(&count)
 	if count > 0 {
+		// 任务编排目录已存在，检查脚本管理子菜单是否存在
+		initScriptMenuIfNeeded()
 		return
 	}
 
@@ -152,6 +154,18 @@ func InitTaskMenu() {
 			KeepAlive:  true,
 			Perms:      "task:execution:list",
 		},
+		{
+			Name:       "脚本管理",
+			ParentId:   dirMenu.ID,
+			OrderNum:   4,
+			Path:       "/taskOrchestration/script",
+			Component:  "script/index",
+			Type:       "C",
+			Status:     true,
+			Icon:       "ele-DocumentCopy",
+			KeepAlive:  true,
+			Perms:      "task:script:list",
+		},
 	}
 	for _, menu := range subMenus {
 		if err := models.DB.Create(&menu).Error; err != nil {
@@ -169,4 +183,46 @@ func InitTaskMenu() {
 	}
 
 	log.Println("任务编排菜单初始化完成")
+}
+
+// initScriptMenuIfNeeded 如果脚本管理菜单不存在，则自动添加
+func initScriptMenuIfNeeded() {
+	var scriptCount int64
+	models.DB.Model(&models.SysMenu{}).Where("name = ? AND del_flag = ?", "脚本管理", "0").Count(&scriptCount)
+	if scriptCount > 0 {
+		return
+	}
+
+	// 查找任务编排目录菜单
+	var dirMenu models.SysMenu
+	if err := models.DB.Where("name = ? AND del_flag = ?", "任务编排", "0").First(&dirMenu).Error; err != nil {
+		log.Printf("未找到任务编排目录菜单，跳过初始化脚本管理菜单: %v", err)
+		return
+	}
+
+	// 创建脚本管理子菜单
+	scriptMenu := models.SysMenu{
+		Name:       "脚本管理",
+		ParentId:   dirMenu.ID,
+		OrderNum:   4,
+		Path:       "/taskOrchestration/script",
+		Component:  "script/index",
+		Type:       "C",
+		Status:     true,
+		Icon:       "ele-DocumentCopy",
+		KeepAlive:  true,
+		Perms:      "task:script:list",
+	}
+	if err := models.DB.Create(&scriptMenu).Error; err != nil {
+		log.Printf("初始化脚本管理菜单失败: %v", err)
+		return
+	}
+
+	// 将菜单权限赋予管理员角色
+	var adminRole models.SysRole
+	if err := models.DB.Where("id = ?", 1).First(&adminRole).Error; err == nil {
+		models.DB.Create(&models.SysRoleMenu{RoleId: adminRole.ID, MenuId: scriptMenu.ID})
+	}
+
+	log.Println("脚本管理菜单初始化完成")
 }

@@ -34,11 +34,14 @@ func (c *TaskExecutionController) QuickExecuteHandler(ctx *gin.Context) {
 	}
 
 	service := instance.TaskExecutionService{}
-	execution, err := service.CreateExecution(name, request.Type, 0, userId, userName, request.InstanceIds, request.KeyId, timeout)
+	execution, err := service.CreateExecution(name, request.Type, 0, userId, userName, request.InstanceIds, request.KeyId, timeout, request.Content, request.ScriptLang, request.SrcPath, request.DestPath)
 	if err != nil {
 		c.Failure(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// 异步执行
+	go instance.RunExecution(execution.ID)
 
 	c.Success(ctx, gin.H{"executionId": execution.ID, "executionNo": execution.ExecutionNo})
 }
@@ -67,11 +70,14 @@ func (c *TaskExecutionController) TemplateExecuteHandler(ctx *gin.Context) {
 	}
 
 	service := instance.TaskExecutionService{}
-	execution, err := service.CreateExecution(tpl.Name, models.ExecTypeTemplate, request.TemplateId, userId, userName, request.InstanceIds, request.KeyId, timeout)
+	execution, err := service.CreateExecution(tpl.Name, models.ExecTypeTemplate, request.TemplateId, userId, userName, request.InstanceIds, request.KeyId, timeout, "", "", "", "")
 	if err != nil {
 		c.Failure(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// 异步执行
+	go instance.RunExecution(execution.ID)
 
 	c.Success(ctx, gin.H{"executionId": execution.ID, "executionNo": execution.ExecutionNo})
 }
@@ -96,11 +102,14 @@ func (c *TaskExecutionController) PipelineExecuteHandler(ctx *gin.Context) {
 	}
 
 	service := instance.TaskExecutionService{}
-	execution, err := service.CreateExecution(pipeline.Name, models.ExecTypePipeline, request.PipelineId, userId, userName, request.InstanceIds, request.KeyId, 0)
+	execution, err := service.CreateExecution(pipeline.Name, models.ExecTypePipeline, request.PipelineId, userId, userName, request.InstanceIds, request.KeyId, 0, "", "", "", "")
 	if err != nil {
 		c.Failure(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// 异步执行编排
+	go instance.RunPipelineExecution(execution.ID)
 
 	c.Success(ctx, gin.H{"executionId": execution.ID, "executionNo": execution.ExecutionNo})
 }
@@ -162,6 +171,25 @@ func (c *TaskExecutionController) DetailHandler(ctx *gin.Context) {
 
 	// 同时获取主机结果
 	hosts, _ := service.GetExecutionHosts(request.ExecutionId)
+
+	// 编排执行额外返回步骤及每步的主机结果
+	if result.Type == models.ExecTypePipeline {
+		steps, _ := service.GetStepExecutions(request.ExecutionId)
+		var stepDetails []gin.H
+		for _, step := range steps {
+			stepHosts, _ := service.GetExecutionHostsByStepExecId(request.ExecutionId, step.ID)
+			stepDetails = append(stepDetails, gin.H{
+				"step":  step,
+				"hosts": stepHosts,
+			})
+		}
+		c.Success(ctx, gin.H{
+			"execution": result,
+			"hosts":     hosts,
+			"steps":     stepDetails,
+		})
+		return
+	}
 
 	c.Success(ctx, gin.H{
 		"execution": result,

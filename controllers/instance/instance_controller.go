@@ -1,10 +1,12 @@
 package instance
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/zhany/ops-go/controllers"
 	"github.com/zhany/ops-go/controllers/instance/api"
 	"github.com/zhany/ops-go/services/instance"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -67,6 +69,22 @@ func (c *InstanceController) ChangeStatus(ctx *gin.Context) {
 	}
 
 	c.JustSuccess(ctx)
+}
+
+// ListInstanceHandler 查询实例列表（不分页）
+func (c *InstanceController) ListInstanceHandler(ctx *gin.Context) {
+	request := api.ListInstanceRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil && !errors.Is(err, io.EOF) {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := instance.InstanceService{}
+	info, err := service.ListInstance(request)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.Success(ctx, info)
 }
 
 // PageInstanceHandler 分页查询实例

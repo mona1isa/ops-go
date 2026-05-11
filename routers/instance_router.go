@@ -17,6 +17,7 @@ func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 		instanceGroup.POST("/add", instanceController.AddInstanceHandler)
 		instanceGroup.POST("/edit", instanceController.EditInstanceHandler)
 		instanceGroup.POST("/changeStatus", instanceController.ChangeStatus)
+		instanceGroup.POST("/list", instanceController.ListInstanceHandler)
 		instanceGroup.POST("/page", instanceController.PageInstanceHandler)
 		instanceGroup.GET("/info/:id", instanceController.GetInstanceDetailHandler)
 		instanceGroup.DELETE("/rm/:id", instanceController.DeleteInstanceHandler)
