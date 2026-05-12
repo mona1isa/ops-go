@@ -30,6 +30,7 @@ type ChangeStatusRequest struct {
 type PageInstanceRequest struct {
 	controllers.PageRequest
 	AddInstanceRequest
+	OnlineStatus string `json:"onlineStatus"`
 }
 
 type InstanceKeyBindingRequest struct {
@@ -43,8 +44,9 @@ type InstanceKeyUnbindingRequest struct {
 }
 
 type ListInstanceRequest struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	OnlineStatus string `json:"onlineStatus"`
 }
 
 type OsTypeRequest struct {
