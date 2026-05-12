@@ -109,6 +109,9 @@ func (s *InstanceService) ListInstance(request api.ListInstanceRequest) ([]model
 	if request.Status != "" {
 		db = db.Where("status = ?", request.Status)
 	}
+	if request.OnlineStatus != "" {
+		db = db.Where("online_status = ?", request.OnlineStatus)
+	}
 
 	var instances []models.OpsInstance
 	if err := db.Find(&instances).Error; err != nil {
@@ -143,6 +146,11 @@ func (s *InstanceService) PageInstance(request api.PageInstanceRequest) (models.
 	if request.Status != "" {
 		scopes = append(scopes, func(db *gorm.DB) *gorm.DB {
 			return db.Where("status = ?", request.Status)
+		})
+	}
+	if request.OnlineStatus != "" {
+		scopes = append(scopes, func(db *gorm.DB) *gorm.DB {
+			return db.Where("online_status = ?", request.OnlineStatus)
 		})
 	}
 
