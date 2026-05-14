@@ -34,6 +34,8 @@ func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 		instanceGroup.POST("/sftp/list", sftpController.ListHandler)
 		instanceGroup.POST("/sftp/download", sftpController.DownloadHandler)
 		instanceGroup.POST("/sftp/upload", sftpController.UploadHandler)
+		instanceGroup.POST("/sftp/upload/chunk", sftpController.UploadChunkHandler)
+		instanceGroup.POST("/sftp/upload/check", sftpController.UploadCheckHandler)
 		instanceGroup.POST("/sftp/remove", sftpController.RemoveHandler)
 		instanceGroup.POST("/sftp/rename", sftpController.RenameHandler)
 		instanceGroup.POST("/sftp/mkdir", sftpController.MkdirHandler)

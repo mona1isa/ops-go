@@ -43,3 +43,11 @@ type SftpMkdirRequest struct {
 	KeyId      int    `json:"keyId" binding:"required"`
 	RemotePath string `json:"remotePath" binding:"required"`
 }
+
+// SftpUploadCheckRequest SFTP 断点续传查询请求
+type SftpUploadCheckRequest struct {
+	InstanceId int    `json:"instanceId" binding:"required"`
+	KeyId      int    `json:"keyId" binding:"required"`
+	RemotePath string `json:"remotePath" binding:"required"`
+	FileName   string `json:"fileName" binding:"required"`
+}
