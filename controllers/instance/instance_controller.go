@@ -130,6 +130,22 @@ func (c *InstanceController) DeleteInstanceHandler(ctx *gin.Context) {
 	c.JustSuccess(ctx)
 }
 
+// BatchDeleteInstanceHandler 批量删除实例
+func (c *InstanceController) BatchDeleteInstanceHandler(ctx *gin.Context) {
+	request := api.BatchDeleteInstanceRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	service := instance.InstanceService{}
+	if err := service.BatchDeleteInstance(request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.JustSuccess(ctx)
+}
+
 // KeyBindingHandler 绑定key
 func (c *InstanceController) KeyBindingHandler(ctx *gin.Context) {
 	request := api.InstanceKeyBindingRequest{}

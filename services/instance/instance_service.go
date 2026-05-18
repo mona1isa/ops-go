@@ -199,6 +199,62 @@ func (s *InstanceService) DeleteInstance(id int) (err error) {
 	return nil
 }
 
+// BatchDeleteInstance 批量删除实例
+func (s *InstanceService) BatchDeleteInstance(request api.BatchDeleteInstanceRequest) (err error) {
+	if len(request.Ids) == 0 {
+		return errors.New("请选择要删除的主机")
+	}
+
+	tx := models.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 删除主机-凭证关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsInstanceKey{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机-凭证关联失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除主机-分组关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsInstanceGroup{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机-分组关联失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除用户-主机权限关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsUserInstanceAuth{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除用户-主机权限关联失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除主机执行记录关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsExecutionHost{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机执行记录失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除主机
+	if err := tx.Where("id in (?)", request.Ids).Delete(&models.OpsInstance{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		log.Println("批量删除主机事务提交失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	return nil
+}
+
 // KeyBinding 主机绑定密钥
 func (s *InstanceService) KeyBinding(request api.InstanceKeyBindingRequest) (err error) {
 	instanceId := request.InstanceId

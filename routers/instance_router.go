@@ -21,6 +21,7 @@ func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 		instanceGroup.POST("/page", instanceController.PageInstanceHandler)
 		instanceGroup.GET("/info/:id", instanceController.GetInstanceDetailHandler)
 		instanceGroup.DELETE("/rm/:id", instanceController.DeleteInstanceHandler)
+		instanceGroup.POST("/batchDelete", instanceController.BatchDeleteInstanceHandler)
 		instanceGroup.POST("/keys/binding", instanceController.KeyBindingHandler)
 		instanceGroup.POST("/keys/unbinding", instanceController.UnBindingKeyHandler)
 		instanceGroup.POST("/keys/testConnect", instanceController.TestConnectHandler)

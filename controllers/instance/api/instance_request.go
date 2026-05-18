@@ -49,6 +49,10 @@ type ListInstanceRequest struct {
 	OnlineStatus string `json:"onlineStatus"`
 }
 
+type BatchDeleteInstanceRequest struct {
+	Ids []int `json:"ids" required:"true"`
+}
+
 type OsTypeRequest struct {
 	OsType string `json:"osType"`
 }
