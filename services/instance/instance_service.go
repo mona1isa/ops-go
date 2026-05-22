@@ -283,7 +283,7 @@ func (s *InstanceService) KeyBinding(request api.InstanceKeyBindingRequest) (err
 	return nil
 }
 
-// UnBindingKey 主机解绑密钥
+// UnBindingKey 主机解绑密钥（同时清除用户授权记录）
 func (s *InstanceService) UnBindingKey(request api.InstanceKeyUnbindingRequest) (err error) {
 	instanceId := request.InstanceId
 	keyIds := request.KeyIds
@@ -299,6 +299,12 @@ func (s *InstanceService) UnBindingKey(request api.InstanceKeyUnbindingRequest) 
 	if err := models.DB.Where("instance_id = ? and key_id in (?)", instanceId, keyIds).Delete(&models.OpsInstanceKey{}).Error; err != nil {
 		log.Println("解绑密钥失败：", err)
 		return errors.New("解绑密钥失败")
+	}
+
+	// 同时清除该主机-凭证的所有用户授权记录
+	if err := models.DB.Where("instance_id = ? AND key_id IN (?)", instanceId, keyIds).
+		Delete(&models.OpsUserInstanceKeyAuth{}).Error; err != nil {
+		log.Println("清除用户凭证授权记录失败：", err)
 	}
 	return nil
 }

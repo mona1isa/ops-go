@@ -20,5 +20,10 @@ func (*KeysRouter) Setup(r *gin.RouterGroup) {
 		keysGroup.GET("/available/list/:instanceId", keysController.AvailableKeysHandler)
 		keysGroup.POST("/available/listBy/osType", keysController.AvailableKeysBySystemHandler)
 		keysGroup.GET("/publicKey", keysController.GetPublicKeyHandler)
+		keysGroup.GET("/:id", keysController.GetKeyDetailHandler)
+		keysGroup.GET("/:id/instances", keysController.GetKeyInstancesHandler)
+		keysGroup.GET("/:id/available-instances", keysController.GetAvailableInstancesHandler)
+		keysGroup.POST("/bind-instances", keysController.BindInstancesHandler)
+		keysGroup.DELETE("/:keyId/instances/:instanceId", keysController.UnbindInstanceHandler)
 	}
 }

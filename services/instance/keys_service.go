@@ -225,6 +225,97 @@ func (s *KeysService) AvailableKeysBySystem(request api.OsTypeRequest) (keys []m
 	return keys, nil
 }
 
+// GetKeyDetail 获取凭证详情
+func (s *KeysService) GetKeyDetail(id int) (models.OpsKey, error) {
+	var key models.OpsKey
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&key).Error; err != nil {
+		log.Println("查询凭证详情失败：", err)
+		return key, errors.New("凭证不存在")
+	}
+	return key, nil
+}
+
+// GetKeyInstances 获取凭证绑定的主机列表（分页）
+func (s *KeysService) GetKeyInstances(keyId, pageNum, pageSize int) (models.PageResult[models.OpsInstance], error) {
+	scope := func(db *gorm.DB) *gorm.DB {
+		return db.Where("id IN (?)",
+			models.DB.Table("ops_instance_keys").Select("instance_id").Where("key_id = ?", keyId),
+		).Where("del_flag = ?", "0")
+	}
+	result, err := models.Paginate[models.OpsInstance](models.DB, pageNum, pageSize, scope)
+	if err != nil {
+		log.Println("查询凭证绑定的主机列表异常：", err)
+		return result, errors.New("查询绑定的主机列表失败")
+	}
+	return result, nil
+}
+
+// GetAvailableInstances 获取未绑定该凭证的主机列表
+func (s *KeysService) GetAvailableInstances(keyId int, name, ip string) ([]models.OpsInstance, error) {
+	db := models.DB.Where("del_flag = ? AND status = ?", "0", "1").
+		Where("id NOT IN (?)",
+			models.DB.Table("ops_instance_keys").Select("instance_id").Where("key_id = ?", keyId),
+		)
+	if name != "" {
+		db = db.Where("name LIKE ?", "%"+name+"%")
+	}
+	if ip != "" {
+		db = db.Where("ip LIKE ?", "%"+ip+"%")
+	}
+	var instances []models.OpsInstance
+	if err := db.Find(&instances).Error; err != nil {
+		log.Println("查询可用主机列表异常：", err)
+		return nil, errors.New("查询可用主机列表失败")
+	}
+	return instances, nil
+}
+
+// BindInstances 批量绑定主机到凭证
+func (s *KeysService) BindInstances(keyId int, instanceIds []int) error {
+	var key models.OpsKey
+	if err := models.DB.First(&key, keyId).Error; err != nil {
+		return errors.New("凭证不存在")
+	}
+
+	var alreadyBound int64
+	models.DB.Model(&models.OpsInstanceKey{}).
+		Where("key_id = ? AND instance_id IN ?", keyId, instanceIds).
+		Count(&alreadyBound)
+	if alreadyBound > 0 {
+		return errors.New("部分主机已绑定该凭证，请刷新后重试")
+	}
+
+	records := make([]models.OpsInstanceKey, 0, len(instanceIds))
+	for _, instanceId := range instanceIds {
+		records = append(records, models.OpsInstanceKey{KeyId: keyId, InstanceId: instanceId})
+	}
+	if err := models.DB.Create(&records).Error; err != nil {
+		log.Println("批量绑定主机失败：", err)
+		return errors.New("批量绑定主机失败")
+	}
+	return nil
+}
+
+// UnbindInstance 解绑凭证下的某个主机（同时清除用户授权记录）
+func (s *KeysService) UnbindInstance(keyId, instanceId int) error {
+	result := models.DB.Where("key_id = ? AND instance_id = ?", keyId, instanceId).
+		Delete(&models.OpsInstanceKey{})
+	if result.Error != nil {
+		log.Println("解绑主机失败：", result.Error)
+		return errors.New("解绑主机失败")
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("绑定关系不存在")
+	}
+
+	// 同时清除该主机-凭证的所有用户授权记录，否则用户在"我的主机"和SSH连接中仍会看到该凭证
+	if err := models.DB.Where("instance_id = ? AND key_id = ?", instanceId, keyId).
+		Delete(&models.OpsUserInstanceKeyAuth{}).Error; err != nil {
+		log.Println("清除用户凭证授权记录失败：", err)
+	}
+	return nil
+}
+
 // GetPublicKey 获取公钥用于加密凭证
 func (s *KeysService) GetPublicKey() (string, error) {
 	pubKey, err := utils.GetPublicKey()

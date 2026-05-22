@@ -28,3 +28,15 @@ type PageKeysRequest struct {
 	Protocol string `json:"protocol"`
 	Type     int    `json:"type"`
 }
+
+// BindInstancesRequest 批量绑定主机到凭证
+type BindInstancesRequest struct {
+	KeyId       int   `json:"keyId" binding:"required"`
+	InstanceIds []int `json:"instanceIds" binding:"required"`
+}
+
+// AvailableInstancesQuery 查询可用主机的查询参数
+type AvailableInstancesQuery struct {
+	Name string `form:"name"`
+	Ip   string `form:"ip"`
+}
