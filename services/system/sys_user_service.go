@@ -13,12 +13,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type UserService struct {
+}
+
+// IsCaptchaEnabled 检查验证码开关是否开启
+func IsCaptchaEnabled() bool {
+	val := os.Getenv("CAPTCHA_ENABLED")
+	return strings.EqualFold(val, "true") || val == "1"
 }
 
 func (u *UserService) BastionLogin(username string, password string) (string, error) {
@@ -45,15 +52,17 @@ func (u *UserService) BastionLogin(username string, password string) (string, er
 }
 
 func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
-	// 验证码校验
-	captchaService := CaptchaService{}
-	capVal := Captcha{
-		Uuid: request.Uuid,
-		Text: request.Code,
-	}
-	rs := captchaService.VerifyCaptcha(&capVal)
-	if !rs {
-		return "", errors.New("验证码错误")
+	// 验证码校验（根据配置开关决定是否校验）
+	if IsCaptchaEnabled() {
+		captchaService := CaptchaService{}
+		capVal := Captcha{
+			Uuid: request.Uuid,
+			Text: request.Code,
+		}
+		rs := captchaService.VerifyCaptcha(&capVal)
+		if !rs {
+			return "", errors.New("验证码错误")
+		}
 	}
 	// 验证用户信息
 	username := request.Username
@@ -77,7 +86,8 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	now := time.Now()
 	exprTime := now.Add(1 * time.Hour)
 	expirationTime := exprTime.Unix()
-	token := captchaService.GetUuid()
+	captchaSvc := CaptchaService{}
+	token := captchaSvc.GetUuid()
 	userId := strconv.Itoa(user.ID)
 	deptId := strconv.Itoa(user.DeptId)
 	jwt, err := middleware.GenerateJWT(expirationTime, token, userId, deptId, user.UserName)
