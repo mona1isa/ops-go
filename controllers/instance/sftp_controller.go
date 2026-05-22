@@ -356,6 +356,136 @@ func (c *SftpController) MkdirHandler(ctx *gin.Context) {
 	c.JustSuccess(ctx)
 }
 
+// UploadCheckHandler 查询远程文件已上传大小（用于断点续传）
+func (c *SftpController) UploadCheckHandler(ctx *gin.Context) {
+	var request api.SftpUploadCheckRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	sftpClient, _, err := c.validateAndConnect(ctx, request.InstanceId, request.KeyId)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	defer sftpClient.Close()
+
+	remotePath := path.Join(path.Clean(request.RemotePath), request.FileName)
+	remotePath = path.Clean(remotePath)
+
+	info, err := sftpClient.Client.Stat(remotePath)
+	if err != nil {
+		c.Success(ctx, gin.H{"uploadedSize": 0})
+		return
+	}
+
+	c.Success(ctx, gin.H{"uploadedSize": info.Size()})
+}
+
+// UploadChunkHandler 上传文件分片（断点续传）
+func (c *SftpController) UploadChunkHandler(ctx *gin.Context) {
+	instanceIdStr := ctx.PostForm("instanceId")
+	keyIdStr := ctx.PostForm("keyId")
+	remotePath := ctx.PostForm("remotePath")
+	chunkIndexStr := ctx.PostForm("chunkIndex")
+	chunkTotalStr := ctx.PostForm("chunkTotal")
+	fileSizeStr := ctx.PostForm("fileSize")
+	fileName := ctx.PostForm("fileName")
+
+	instanceId, err := strconv.Atoi(instanceIdStr)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "主机ID格式错误")
+		return
+	}
+	keyId, err := strconv.Atoi(keyIdStr)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "凭证ID格式错误")
+		return
+	}
+	chunkIndex, err := strconv.Atoi(chunkIndexStr)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "分片索引格式错误")
+		return
+	}
+	chunkTotal, err := strconv.Atoi(chunkTotalStr)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "分片总数格式错误")
+		return
+	}
+	fileSize, err := strconv.ParseInt(fileSizeStr, 10, 64)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "文件大小格式错误")
+		return
+	}
+
+	remotePath = path.Clean(remotePath)
+	if remotePath == "" {
+		remotePath = "/"
+	}
+
+	// 获取上传的分片文件
+	fileHeader, err := ctx.FormFile("file")
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "获取上传文件失败: "+err.Error())
+		return
+	}
+
+	uploadedFile, err := fileHeader.Open()
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "读取上传文件失败: "+err.Error())
+		return
+	}
+	defer uploadedFile.Close()
+
+	sftpClient, _, err := c.validateAndConnect(ctx, instanceId, keyId)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	defer sftpClient.Close()
+
+	// 组合远程文件路径
+	remoteFilePath := path.Join(remotePath, fileName)
+	remoteFilePath = path.Clean(remoteFilePath)
+
+	// 打开远程文件（不存在则创建）
+	remoteFile, err := sftpClient.Client.OpenFile(remoteFilePath, os.O_WRONLY|os.O_CREATE)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "打开远程文件失败: "+err.Error())
+		return
+	}
+	defer remoteFile.Close()
+
+	// 读取分片数据
+	chunkData, err := io.ReadAll(uploadedFile)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "读取分片数据失败: "+err.Error())
+		return
+	}
+
+	// 计算偏移量并写入（固定分片大小 2MB）
+	const chunkSize int64 = 2 * 1024 * 1024
+	offset := int64(chunkIndex) * chunkSize
+	_, err = remoteFile.WriteAt(chunkData, offset)
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, "写入远程文件失败: "+err.Error())
+		return
+	}
+
+	// 如果是最后一片，校验并截断到正确大小（防止之前上传的文件更大）
+	if chunkIndex == chunkTotal-1 {
+		stat, err := remoteFile.Stat()
+		if err == nil && stat.Size() > fileSize {
+			if truncateErr := remoteFile.Truncate(fileSize); truncateErr != nil {
+				log.Printf("截断远程文件失败: %v", truncateErr)
+			}
+		}
+	}
+
+	c.JustSuccess(ctx)
+}
+
 // SftpUploadRequest 上传请求结构体（用于文档生成）
 // Deprecated: 仅用于保持结构体定义，实际上传使用 multipart/form-data
 func (c *SftpController) SftpUploadRequest(ctx *gin.Context) {

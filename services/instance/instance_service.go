@@ -199,6 +199,62 @@ func (s *InstanceService) DeleteInstance(id int) (err error) {
 	return nil
 }
 
+// BatchDeleteInstance 批量删除实例
+func (s *InstanceService) BatchDeleteInstance(request api.BatchDeleteInstanceRequest) (err error) {
+	if len(request.Ids) == 0 {
+		return errors.New("请选择要删除的主机")
+	}
+
+	tx := models.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 删除主机-凭证关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsInstanceKey{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机-凭证关联失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除主机-分组关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsInstanceGroup{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机-分组关联失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除用户-主机权限关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsUserInstanceAuth{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除用户-主机权限关联失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除主机执行记录关联
+	if err := tx.Where("instance_id in (?)", request.Ids).Delete(&models.OpsExecutionHost{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机执行记录失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	// 删除主机
+	if err := tx.Where("id in (?)", request.Ids).Delete(&models.OpsInstance{}).Error; err != nil {
+		tx.Rollback()
+		log.Println("批量删除主机失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		log.Println("批量删除主机事务提交失败：", err)
+		return errors.New("批量删除主机失败")
+	}
+
+	return nil
+}
+
 // KeyBinding 主机绑定密钥
 func (s *InstanceService) KeyBinding(request api.InstanceKeyBindingRequest) (err error) {
 	instanceId := request.InstanceId
@@ -227,7 +283,7 @@ func (s *InstanceService) KeyBinding(request api.InstanceKeyBindingRequest) (err
 	return nil
 }
 
-// UnBindingKey 主机解绑密钥
+// UnBindingKey 主机解绑密钥（同时清除用户授权记录）
 func (s *InstanceService) UnBindingKey(request api.InstanceKeyUnbindingRequest) (err error) {
 	instanceId := request.InstanceId
 	keyIds := request.KeyIds
@@ -243,6 +299,12 @@ func (s *InstanceService) UnBindingKey(request api.InstanceKeyUnbindingRequest) 
 	if err := models.DB.Where("instance_id = ? and key_id in (?)", instanceId, keyIds).Delete(&models.OpsInstanceKey{}).Error; err != nil {
 		log.Println("解绑密钥失败：", err)
 		return errors.New("解绑密钥失败")
+	}
+
+	// 同时清除该主机-凭证的所有用户授权记录
+	if err := models.DB.Where("instance_id = ? AND key_id IN (?)", instanceId, keyIds).
+		Delete(&models.OpsUserInstanceKeyAuth{}).Error; err != nil {
+		log.Println("清除用户凭证授权记录失败：", err)
 	}
 	return nil
 }

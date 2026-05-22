@@ -148,3 +148,96 @@ func (k *KeysController) GetPublicKeyHandler(ctx *gin.Context) {
 		"publicKey": publicKey,
 	})
 }
+
+// GetKeyDetailHandler 获取凭证详情
+func (k *KeysController) GetKeyDetailHandler(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		k.Failure(ctx, http.StatusBadRequest, "无效的凭证ID")
+		return
+	}
+	service := instance.KeysService{}
+	key, err := service.GetKeyDetail(id)
+	if err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.Success(ctx, key)
+}
+
+// GetKeyInstancesHandler 获取凭证绑定的主机列表（分页）
+func (k *KeysController) GetKeyInstancesHandler(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		k.Failure(ctx, http.StatusBadRequest, "无效的凭证ID")
+		return
+	}
+	pageNum, _ := strconv.Atoi(ctx.DefaultQuery("pageNum", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("pageSize", "10"))
+	service := instance.KeysService{}
+	result, err := service.GetKeyInstances(id, pageNum, pageSize)
+	if err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.Success(ctx, result)
+}
+
+// GetAvailableInstancesHandler 获取未绑定该凭证的主机列表
+func (k *KeysController) GetAvailableInstancesHandler(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		k.Failure(ctx, http.StatusBadRequest, "无效的凭证ID")
+		return
+	}
+	query := api.AvailableInstancesQuery{}
+	_ = ctx.ShouldBindQuery(&query)
+
+	service := instance.KeysService{}
+	instances, err := service.GetAvailableInstances(id, query.Name, query.Ip)
+	if err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.Success(ctx, instances)
+}
+
+// BindInstancesHandler 批量绑定主机到凭证
+func (k *KeysController) BindInstancesHandler(ctx *gin.Context) {
+	request := api.BindInstancesRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		k.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	service := instance.KeysService{}
+	if err := service.BindInstances(request.KeyId, request.InstanceIds); err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.JustSuccess(ctx)
+}
+
+// UnbindInstanceHandler 解绑凭证下的某个主机
+func (k *KeysController) UnbindInstanceHandler(ctx *gin.Context) {
+	keyIdStr := ctx.Param("keyId")
+	keyId, err := strconv.Atoi(keyIdStr)
+	if err != nil {
+		k.Failure(ctx, http.StatusBadRequest, "无效的凭证ID")
+		return
+	}
+	instanceIdStr := ctx.Param("instanceId")
+	instanceId, err := strconv.Atoi(instanceIdStr)
+	if err != nil {
+		k.Failure(ctx, http.StatusBadRequest, "无效的主机ID")
+		return
+	}
+	service := instance.KeysService{}
+	if err := service.UnbindInstance(keyId, instanceId); err != nil {
+		k.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+	k.JustSuccess(ctx)
+}

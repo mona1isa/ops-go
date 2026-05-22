@@ -17,6 +17,8 @@ func main() {
 	go bastion.Init()
 	// 启动主机健康检查服务
 	go instanceService.NewHealthCheckService().Start()
+	// 启动审计录像自动清理服务
+	go instanceService.NewRecordingCleanupService().Start()
 	// 启动Web服务
 	r := routers.Init()
 	err := r.Run(":" + os.Getenv("APP_PORT"))

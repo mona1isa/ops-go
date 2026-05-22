@@ -7,6 +7,7 @@ import (
 	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/zhany/ops-go/bastion"
 	"github.com/zhany/ops-go/controllers"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
@@ -113,12 +114,13 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 		return
 	}
 
-	// 获取用户ID
+	// 获取用户ID和用户名
 	userId, err := strconv.Atoi(token.UserID)
 	if err != nil {
 		c.sendErrorResponse(ctx.Writer, "用户ID无效", http.StatusUnauthorized)
 		return
 	}
+	userName := token.Username
 
 	// 升级HTTP连接为WebSocket
 	conn, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
@@ -179,7 +181,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 	// 如果只有一个凭证，直接连接；否则返回凭证列表
 	if len(keys) == 1 {
 		// 直接连接
-		if err := c.connectToInstance(conn, sessionID, userId, instanceId, keys[0], isAdmin, cols, rows); err != nil {
+		if err := c.connectToInstance(conn, sessionID, userId, instanceId, keys[0], isAdmin, cols, rows, userName); err != nil {
 			c.sendError(conn, "连接失败: "+err.Error())
 			return
 		}
@@ -225,7 +227,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 				c.sendError(conn, "无效的凭证ID")
 				continue
 			}
-			if err := c.connectToInstance(conn, sessionID, userId, instanceId, *selectedKey, isAdmin, connectCols, connectRows); err != nil {
+			if err := c.connectToInstance(conn, sessionID, userId, instanceId, *selectedKey, isAdmin, connectCols, connectRows, userName); err != nil {
 				c.sendError(conn, "连接失败: "+err.Error())
 				continue
 			}
@@ -247,7 +249,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 }
 
 // connectToInstance 连接到远程主机
-func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID string, userId, instanceId int, key models.OpsKey, isAdmin bool, cols, rows int) error {
+func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID string, userId, instanceId int, key models.OpsKey, isAdmin bool, cols, rows int, userName string) error {
 	// 验证主机是否存在
 	var instance models.OpsInstance
 	if err := models.DB.First(&instance, instanceId).Error; err != nil {
@@ -397,6 +399,18 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 
 	// 发送连接成功消息
 	c.sendSuccess(conn, "连接成功")
+
+	// 注册到全局会话管理器（供仪表盘统计在线会话数）
+	bastion.GetGlobalSessionManager().AddSession(sessionID, &bastion.ActiveSession{
+		SessionID:  sessionID,
+		UserID:     userId,
+		UserName:   userName,
+		InstanceID: instanceId,
+		InstanceIP: instance.Ip,
+		Conn:       sshConn,
+		Session:    session,
+		StartTime:  time.Now(),
+	})
 
 	// 启动goroutine读取SSH输出并发送到WebSocket
 	go c.readSSHOutput(conn, sessionID, sshSession)
@@ -663,6 +677,7 @@ func (c *WebSocketController) TerminateSession(sessionID string) error {
 	sessionMutex.Lock()
 	delete(activeSessions, sessionID)
 	sessionMutex.Unlock()
+	bastion.GetGlobalSessionManager().RemoveSession(sessionID)
 
 	log.Printf("Web Terminal 会话已终止: %s", sessionID)
 	return nil
@@ -715,6 +730,7 @@ func (c *WebSocketController) closeSession(sessionID string, status int8) {
 
 		delete(activeSessions, sessionID)
 	}
+	bastion.GetGlobalSessionManager().RemoveSession(sessionID)
 }
 
 // sendCredentialsList 发送凭证列表

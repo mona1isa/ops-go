@@ -118,20 +118,22 @@ func (s *SessionRecordService) GetBySessionID(sessionID string) (*models.OpsSess
 
 // Delete 删除会话记录（同时删除录像文件）
 func (s *SessionRecordService) Delete(id uint64) error {
-	_, err := s.GetByID(id)
+	record, err := s.GetByID(id)
 	if err != nil {
 		return err
+	}
+
+	// 删除录像文件
+	if record.RecordingFile != "" {
+		if err := os.Remove(record.RecordingFile); err != nil && !os.IsNotExist(err) {
+			log.Printf("删除录像文件失败 [%s]: %v", record.RecordingFile, err)
+		}
 	}
 
 	// 删除数据库记录
 	if err := models.DB.Delete(&models.OpsSessionRecord{}, id).Error; err != nil {
 		return err
 	}
-
-	// TODO: 删除录像文件（如果需要）
-	// if record.RecordingFile != "" {
-	//     os.Remove(record.RecordingFile)
-	// }
 
 	return nil
 }
