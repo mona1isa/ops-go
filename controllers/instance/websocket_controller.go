@@ -398,7 +398,7 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 	}
 
 	// 发送连接成功消息
-	c.sendSuccess(conn, "连接成功")
+	c.sendSuccess(conn, "连接成功", key.ID)
 
 	// 注册到全局会话管理器（供仪表盘统计在线会话数）
 	bastion.GetGlobalSessionManager().AddSession(sessionID, &bastion.ActiveSession{
@@ -752,10 +752,11 @@ func (c *WebSocketController) sendError(conn *websocket.Conn, message string) {
 }
 
 // sendSuccess 发送成功消息
-func (c *WebSocketController) sendSuccess(conn *websocket.Conn, message string) {
+func (c *WebSocketController) sendSuccess(conn *websocket.Conn, message string, keyId int) {
 	conn.WriteJSON(WebSocketMessage{
-		Type: "success",
-		Data: message,
+		Type:  "success",
+		Data:  message,
+		KeyId: keyId,
 	})
 }
 

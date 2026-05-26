@@ -19,29 +19,19 @@ type SftpClient struct {
 // NewSftpClient 创建新的 SFTP 客户端
 // 复用现有 SSH 认证逻辑（密码/密钥、解密凭证、端口默认 22）
 func NewSftpClient(info *HostInfo) (*SftpClient, error) {
-	// 如果是密码类型，解密凭证
-	credentials := info.Credentials
-	if info.Type == 1 {
-		decrypted, err := DecryptKey(credentials)
-		if err != nil {
-			log.Printf("解密凭证失败: %v", err)
-			return nil, fmt.Errorf("解密凭证失败: %w", err)
-		}
-		credentials = decrypted
-	}
-
 	// 配置 SSH 客户端
+	// 注意：info.Credentials 已由调用方解密为明文，此处不再重复解密
 	var authMethods []ssh.AuthMethod
 	if info.Type == 2 {
 		// 密钥认证
-		signer, err := ssh.ParsePrivateKey([]byte(credentials))
+		signer, err := ssh.ParsePrivateKey([]byte(info.Credentials))
 		if err != nil {
 			return nil, fmt.Errorf("解析 SSH 密钥失败: %w", err)
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	} else {
 		// 密码认证
-		authMethods = append(authMethods, ssh.Password(credentials))
+		authMethods = append(authMethods, ssh.Password(info.Credentials))
 	}
 
 	config := &ssh.ClientConfig{
