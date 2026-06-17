@@ -235,7 +235,7 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 ![首页](./docs/images/首页.png)
 ![主机列表](./docs/images/主机列表.png)
 ![新增主机](./docs/images/新增主机.png)
-![同步局域网](./docs/images/同步局域网.png)
+![同步局域网主机](./docs/images/同步局域网主机.png)
 ![远程1](./docs/images/远程1.png)
 ![远程2](./docs/images/远程2.png)
 ![文件1](./docs/images/文件1.png)
