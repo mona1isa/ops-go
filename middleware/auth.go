@@ -31,6 +31,7 @@ var PublicPaths = []string{
 	"/api/captcha/generate",
 	"/api/user/login",
 	"/api/user/logout",
+	"/api/user/info",
 	"/api/instance/terminal",
 }
 
