@@ -22,6 +22,14 @@ func CasbinMiddleware() gin.HandlerFunc {
 			}
 		}
 
+		// 只需登录认证、不做策略校验的路径（接口内部已按用户身份过滤数据）
+		for _, path := range AuthenticatedOnlyPaths {
+			if match, _ := filepath.Match(path, currentPath); match {
+				ctx.Next()
+				return
+			}
+		}
+
 		// 获取请求接口和方法
 		obj := strings.TrimRight(currentPath, "/")
 		act := ctx.Request.Method

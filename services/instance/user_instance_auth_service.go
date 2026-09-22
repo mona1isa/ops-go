@@ -645,6 +645,57 @@ func (info *UserInstanceKeyAuth) GetUserInstanceKeyAuth() ([]models.OpsKey, erro
 	return keys, nil
 }
 
+// GetUserAvailableKeys 查询用户在指定主机上可使用的登录凭证
+// 超级管理员返回主机绑定的全部凭证；普通用户返回主机级授权凭证 + 主机所属分组授权的凭证
+func GetUserAvailableKeys(userId int, instanceId int, isAdmin bool) ([]models.OpsKey, error) {
+	if isAdmin {
+		var keys []models.OpsKey
+		if err := models.DB.Table("ops_key").Select("ops_key.*").
+			Joins("JOIN ops_instance_keys ON ops_key.id = ops_instance_keys.key_id").
+			Where("ops_instance_keys.instance_id = ? AND ops_key.del_flag = 0", instanceId).
+			Find(&keys).Error; err != nil {
+			log.Println("获取主机绑定凭证异常: ", err)
+			return nil, errors.New("获取主机凭证失败")
+		}
+		return keys, nil
+	}
+
+	// 主机级授权的凭证
+	var keys []models.OpsKey
+	if err := models.DB.Table("ops_key").Select("ops_key.*").
+		Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").
+		Where("ops_user_instance_key_auth.user_id = ? AND ops_user_instance_key_auth.instance_id = ? AND ops_user_instance_key_auth.auth_type = 1 AND ops_user_instance_key_auth.del_flag = 0", userId, instanceId).
+		Find(&keys).Error; err != nil {
+		log.Println("获取用户已授权凭证异常: ", err)
+		return nil, errors.New("获取用户已授权凭证异常")
+	}
+
+	// 分组级授权的凭证：主机所属分组已授权给用户时，该分组授权的凭证同样可用于登录
+	var groupKeys []models.OpsKey
+	if err := models.DB.Table("ops_key").Select("ops_key.*").
+		Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").
+		Joins("JOIN ops_instance_group ON ops_instance_group.group_id = ops_user_instance_key_auth.group_id").
+		Joins("JOIN ops_user_instance_auth ON ops_user_instance_auth.group_id = ops_user_instance_key_auth.group_id AND ops_user_instance_auth.user_id = ops_user_instance_key_auth.user_id").
+		Where("ops_user_instance_key_auth.user_id = ? AND ops_instance_group.instance_id = ? AND ops_user_instance_key_auth.auth_type = 2 AND ops_user_instance_key_auth.del_flag = 0 AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = 0", userId, instanceId).
+		Find(&groupKeys).Error; err != nil {
+		log.Println("获取用户分组已授权凭证异常: ", err)
+	}
+
+	// 合并去重
+	exist := make(map[int]bool, len(keys))
+	for _, key := range keys {
+		exist[key.ID] = true
+	}
+	for _, key := range groupKeys {
+		if exist[key.ID] {
+			continue
+		}
+		exist[key.ID] = true
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
+
 func (info *MultiKeyAuthCancel) MultiKeyAuthCancelService() error {
 	userId := info.UserId
 	instanceId := info.InstanceId

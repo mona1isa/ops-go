@@ -212,3 +212,18 @@ func (c *InstanceController) GetMyInstanceHandler(ctx *gin.Context) {
 	}
 	c.Success(ctx, result)
 }
+
+// GetMyGroupTreeHandler 获取当前用户有权限的主机分组树（含分组下主机与可用凭证）
+func (c *InstanceController) GetMyGroupTreeHandler(ctx *gin.Context) {
+	userId, _ := strconv.Atoi(c.GetUserId(ctx))
+	myGroupTree := &instance.MyGroupTree{
+		UserId:  userId,
+		IsAdmin: c.IsAdminUser(ctx),
+	}
+	result, err := myGroupTree.GetMyGroupTree()
+	if err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.Success(ctx, result)
+}

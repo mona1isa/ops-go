@@ -27,6 +27,7 @@ func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 		instanceGroup.POST("/keys/testConnect", instanceController.TestConnectHandler)
 
 		instanceGroup.POST("/myInstance", instanceController.GetMyInstanceHandler)
+		instanceGroup.POST("/myGroupTree", instanceController.GetMyGroupTreeHandler)
 
 		// WebSocket终端连接接口
 		instanceGroup.GET("/terminal", wsController.WebSocketHandler)

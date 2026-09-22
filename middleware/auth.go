@@ -34,6 +34,12 @@ var PublicPaths = []string{
 	"/api/instance/terminal",
 }
 
+// AuthenticatedOnlyPaths 只需登录、不做 Casbin 策略校验的路径
+// 这些接口本身已按当前登录用户身份过滤数据，不会越权返回其他用户的数据
+var AuthenticatedOnlyPaths = []string{
+	"/api/instance/myGroupTree",
+}
+
 // IsPublicPath 检查路径是否为公开路径（无需认证）
 func IsPublicPath(path string) bool {
 	for _, p := range PublicPaths {

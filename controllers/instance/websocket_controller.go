@@ -142,13 +142,10 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 		return
 	}
 
-	// 获取用户对该主机的权限凭证
-	keyAuthService := &instance.UserInstanceKeyAuth{
-		UserId:     userId,
-		InstanceId: instanceId,
-		AuthType:   1,
-	}
-	keys, err := keyAuthService.GetUserInstanceKeyAuth()
+	isAdmin := userId == controllers.AdminUserId
+
+	// 获取用户在该主机上可使用的凭证（主机级授权 + 分组级授权，管理员为主机绑定的凭证）
+	keys, err := instance.GetUserAvailableKeys(userId, instanceId, isAdmin)
 	if err != nil {
 		c.sendError(conn, "获取凭证失败: "+err.Error())
 		return
@@ -161,8 +158,6 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 
 	// 生成会话ID
 	sessionID := generateSessionID(userId, instanceId)
-
-	isAdmin := userId == controllers.AdminUserId
 
 	// 从查询参数读取终端尺寸
 	cols := 80
