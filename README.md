@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主机管理、SSH 堡垒机、Web Terminal、会话录像与审计等功能。系统采用前后端分离架构，支持多种认证方式和细粒度的权限控制。
+Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主机管理、SSH 堡垒机、Web Terminal、会话录像与审计、批量任务执行、监控告警、CMDB 资产管理等功能。系统采用前后端分离架构，支持多种认证方式和细粒度的权限控制。
 
 ### 核心特性
 
@@ -10,9 +10,12 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - 🔐 **SSH 堡垒机** - 独立的 SSH 服务（端口 2222），支持命令行交互式操作
 - 🛡️ **高危指令拦截** - 实时检测并阻止危险命令执行，支持精确/前缀/正则三种匹配模式，内置 14 条防护规则，管理员豁免
 - 📹 **会话录像** - 自动录制所有 SSH 会话，支持在线回放和下载
+- 📊 **监控告警** - SSH 采集主机指标（CPU/内存/磁盘/网络）写入 Prometheus，自研 ECharts 实时面板，阈值规则评估 + Webhook 告警通知（HMAC 签名、重试、静默与冷却）
+- 🗂️ **CMDB 资产管理** - 六类资产模型台账、生命周期流转、标签管理、ECharts 关系拓扑图、IP 网段管理（IPAM）
+- ⚙️ **批量任务执行** - 脚本库、任务模板与可视化编排，支持命令/脚本/文件分发五种执行方式
 - 👥 **权限管理** - 基于 Casbin 的 RBAC 权限控制，支持细粒度资源授权
 - 🔑 **凭证管理** - 支持密码和密钥两种认证方式，凭证加密存储
-- 📊 **审计日志** - 完整的操作日志记录，支持日志查询和导出
+- 📝 **审计日志** - 完整的操作日志记录，支持日志查询和导出
 
 ---
 
@@ -146,6 +149,39 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - 登录图形验证码
 - 防止暴力破解与自动化攻击
 
+### 21. 监控采集
+- 采集目标管理（增删改查、启停、手动/自动同步纳管主机）
+- SSH 定时下发采集脚本，采集 CPU、内存、磁盘、网络指标
+- 指标经 Pushgateway 写入 Prometheus 时序存储
+- 采集间隔、超时、并发可通过环境变量配置
+
+### 22. 实时监控面板
+- 自研 ECharts 面板：监控总览、单机指标实时曲线
+- Prometheus 即时查询（instant）与区间查询（range）API
+- 数据源连通状态检测（metrics/status）
+
+### 23. 告警规则与事件
+- 阈值告警：比较符 + 持续时长（ForSec），支持自定义 PromQL 表达式
+- 规则试算（Test）、启停控制、规则静音（Muted）
+- 告警收敛：指纹去重、冷却时间（CooldownSec）、静默期（SilenceUntil）
+- 告警事件列表与详情、事件确认（Ack）、删除
+
+### 24. 通知渠道
+- Webhook 渠道：HMAC 签名、失败重试、通知日志落库（ops_monitor_notify_log）
+- 渠道测试发送与启停管理
+- 邮件/钉钉/企业微信渠道已预留模型常量，发送能力待实现
+
+### 25. CMDB 资产台账
+- 预置六类资产模型：服务器、网络设备、数据库、中间件、域名、SSL 证书
+- 各模型固定属性表单（JSON 存储），资产增删改查与详情抽屉
+- 资产生命周期流转（采购→上架→运行→维护→退役），每次流转记录变更日志
+- 一键从纳管主机（ops_instance）导入为服务器资产
+
+### 26. CMDB 拓扑 / 标签 / IP 管理
+- 资产关联关系维护与 ECharts 力导向拓扑图（邻域聚焦 / 全量视图 ≤300 节点）
+- 标签 CRUD、资产打标全量替换、台账标签筛选与 chips 展示
+- IPAM 网段管理：CIDR 容量计算，资产 IP 与纳管主机 IP 自动归段，使用率与占用明细
+
 ---
 
 ## 未来规划
@@ -159,6 +195,8 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - [x] 脚本库与任务执行
 - [x] 任务模板与编排
 - [x] 活跃会话管理与强制下线
+- [x] 监控告警系统（采集 / 存储 / 面板 / 规则 / Webhook 通知）
+- [x] CMDB 资产管理（台账 / 拓扑 / 标签 / IPAM）
 
 ### 中期规划 (v1.2)
 - [ ] RDP/VNC 协议支持
@@ -167,16 +205,20 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - [ ] 命令审计规则（正则匹配敏感命令告警）
 - [ ] 录像对象存储（OSS/S3）
 - [ ] 定时任务 / Cron 作业调度
-- [ ] 主机性能监控与告警（CPU/内存/磁盘/网络）
+- [x] 主机性能监控与告警（CPU/内存/磁盘/网络）
+- [ ] 通知渠道扩展（邮件/钉钉/企业微信）与告警升级策略
+- [ ] 日志中心（采集 / Loki 存储 / 检索界面 / 日志告警）
+- [ ] 审计日志增强（登录日志、敏感操作留痕）
 
 ### 长期规划 (v2.0)
 - [ ] Kubernetes 集群管理
 - [ ] 自动化运维（Ansible 集成）
-- [ ] Prometheus / Grafana 监控告警集成
+- [x] Prometheus 监控集成（指标存储与查询已接入；Grafana 集成可选）
 - [ ] 多租户支持
 - [ ] 高可用部署（多实例 + 负载均衡）
 - [ ] 操作工单系统（申请-审批-执行闭环）
 - [ ] 数据库审计与敏感数据脱敏
+- [ ] 资产自动发现（SNMP / Cloud API）
 
 ---
 
@@ -194,6 +236,12 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 | JWT | 3.x | 身份认证 |
 | WebSocket | - | 实时通信 |
 | gliderlabs/ssh | 0.3+ | SSH 服务器 |
+
+### 外部依赖（监控告警，可选）
+| 组件 | 说明 |
+|------|------|
+| Prometheus | 指标时序存储与查询（面板、告警评估数据源） |
+| Pushgateway | 采集结果写入端（指标分组 `ops_node`） |
 
 ### 前端
 | 技术 | 版本 | 说明 |
@@ -222,6 +270,7 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - Go 1.24+
 - MySQL 5.7+ / 8.0+
 - Redis 6.0+
+- Prometheus + Pushgateway（启用监控告警功能时需要）
 
 ### 操作系统支持
 - Linux (推荐 CentOS 7+, Ubuntu 18.04+)
@@ -314,6 +363,17 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 # RSA_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----
 # ...
 # -----END RSA PRIVATE KEY-----
+
+# 监控告警（可选，未配置时使用默认地址）
+PROMETHEUS_URL=http://localhost:9090      # 面板查询与告警评估数据源
+PUSHGATEWAY_URL=http://localhost:9091     # 采集结果写入端
+# PROMETHEUS_TOKEN=                        # Prometheus 只读接口 Bearer Token（可选）
+# PUSHGATEWAY_TOKEN=                       # Pushgateway Bearer Token（可选）
+# PROMETHEUS_INSECURE_SKIP_VERIFY=false    # 自建证书场景跳过校验
+# MONITOR_COLLECT_INTERVAL=60              # 采集轮询间隔（秒）
+# MONITOR_COLLECT_TIMEOUT=15               # 单机采集超时（秒）
+# MONITOR_CONCURRENCY=20                   # 采集并发上限
+# MONITOR_EVAL_INTERVAL=30                 # 告警规则评估间隔（秒）
 ```
 
 ### 4. 后端启动
@@ -413,6 +473,20 @@ services:
     ports:
       - "6379:6379"
 
+  # 监控告警所需（可选，启用监控模块时保留）
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    ports:
+      - "9091:9091"
+
   backend:
     image: ops-go:latest
     depends_on:
@@ -435,6 +509,7 @@ services:
 
 volumes:
   mysql_data:
+  prometheus_data:
 ```
 
 启动：
@@ -482,6 +557,8 @@ ops-go/
 ├── controllers/          # 控制器层
 │   ├── instance/         # 实例相关接口（主机、凭证、终端、SFTP、脚本、任务、会话等）
 │   │   └── api/          # 请求/响应 DTO
+│   ├── monitor/          # 监控接口（采集目标、告警规则、事件、通知渠道、指标查询）
+│   ├── cmdb/             # CMDB 接口（资产、标签、关系、网段）
 │   └── system/           # 系统相关接口（用户、角色、菜单、部门、日志等）
 │       └── api/          # 请求/响应 DTO
 ├── data/                 # 数据文件
@@ -495,6 +572,8 @@ ops-go/
 ├── routers/              # 路由配置
 ├── services/             # 业务逻辑层
 │   ├── instance/         # 实例服务（主机、SFTP、任务引擎、会话等）
+│   ├── monitor/          # 监控服务（采集、Prometheus 数据源、规则评估、Webhook 通知）
+│   ├── cmdb/             # CMDB 服务（资产、标签、关系拓扑、IPAM、菜单种子）
 │   └── system/           # 系统服务（用户、角色、菜单、部门、日志等）
 ├── utils/                # 工具函数（RSA 加密、SFTP 客户端等）
 ├── .env                  # 环境变量配置
@@ -629,6 +708,15 @@ exit     # 退出
 | 任务执行 | `/api/task-execution/*` | 任务执行与记录 |
 | 文件管理 | `/api/sftp/*` | SFTP 文件操作 |
 | 验证码 | `/api/captcha/*` | 图形验证码 |
+| 监控采集 | `/api/monitor/target/*` | 采集目标管理 |
+| 告警规则 | `/api/monitor/rule/*` | 规则管理、静默、试算 |
+| 告警事件 | `/api/monitor/event/*` | 事件查询与确认 |
+| 通知渠道 | `/api/monitor/channel/*` | Webhook 渠道管理 |
+| 指标查询 | `/api/monitor/metrics/*` | 总览/即时/区间查询 |
+| 资产台账 | `/api/cmdb/asset/*` | 资产管理与生命周期流转 |
+| 资产标签 | `/api/cmdb/tag/*` | 标签管理与打标 |
+| 资产拓扑 | `/api/cmdb/relation/*` | 关联关系与拓扑图 |
+| IP 管理 | `/api/cmdb/subnet/*` | 网段与 IP 占用 |
 
 ---
 

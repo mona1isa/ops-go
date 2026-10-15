@@ -5,6 +5,7 @@ import (
 	"github.com/zhany/ops-go/controllers/instance"
 	"github.com/zhany/ops-go/routers"
 	instanceService "github.com/zhany/ops-go/services/instance"
+	cmdbService "github.com/zhany/ops-go/services/cmdb"
 	monitorService "github.com/zhany/ops-go/services/monitor"
 	"log"
 	"os"
@@ -22,6 +23,8 @@ func main() {
 	go instanceService.NewRecordingCleanupService().Start()
 	// 初始化监控告警菜单
 	monitorService.InitMonitorMenu()
+	// 初始化资产管理菜单
+	cmdbService.InitCmdbMenu()
 	// 启动主机指标采集服务
 	go monitorService.NewCollectorService().Start()
 	// 启动告警规则评估服务

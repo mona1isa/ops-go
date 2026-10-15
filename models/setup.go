@@ -52,6 +52,12 @@ func InitDB() {
 		&OpsMonitorAlertEvent{},
 		&OpsMonitorNotifyChannel{},
 		&OpsMonitorNotifyLog{},
+		&OpsCmdbAsset{},
+		&OpsCmdbTag{},
+		&OpsCmdbAssetTag{},
+		&OpsCmdbRelation{},
+		&OpsCmdbChangeLog{},
+		&OpsCmdbSubnet{},
 	}
 
 	for _, table := range tables {
