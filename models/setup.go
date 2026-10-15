@@ -47,6 +47,11 @@ func InitDB() {
 		&OpsExecutionHost{},
 		&OpsStepExecution{},
 		&OpsScript{},
+		&OpsMonitorTarget{},
+		&OpsMonitorRule{},
+		&OpsMonitorAlertEvent{},
+		&OpsMonitorNotifyChannel{},
+		&OpsMonitorNotifyLog{},
 	}
 
 	for _, table := range tables {

@@ -65,7 +65,9 @@ collect_pids() {
 
 stop_service() {
 	local pids pid waited
-	pids="$(collect_pids)"
+	# collect_pids 在“无进程”时会因 grep 无匹配返回非 0，配合 set -e / pipefail
+	# 会让脚本静默退出，导致后续 build/start 不执行
+	pids="$(collect_pids || true)"
 	if [[ -z "$pids" ]]; then
 		log "没有发现运行中的服务进程"
 		return 0
@@ -115,12 +117,13 @@ start_service() {
 	mkdir -p "$LOG_DIR"
 	log "启动服务，端口：$APP_PORT，日志：$LOG_FILE"
 	nohup "./$BINARY" >>"$LOG_FILE" 2>&1 &
+	local new_pid=$!
 
 	# 等待端口监听
 	local waited=0
 	while [[ $waited -lt $WAIT_TIMEOUT ]]; do
 		if command -v ss >/dev/null 2>&1 && ss -ltnH "sport = :$APP_PORT" 2>/dev/null | grep -q LISTEN; then
-			log "服务启动成功（PID $(pgrep -f "^$PROJECT_DIR/$BINARY\$" | tr '\n' ' ')）"
+			log "服务启动成功（PID $new_pid）"
 			return 0
 		fi
 		sleep 1

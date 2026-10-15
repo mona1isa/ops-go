@@ -5,6 +5,7 @@ import (
 	"github.com/zhany/ops-go/controllers/instance"
 	"github.com/zhany/ops-go/routers"
 	instanceService "github.com/zhany/ops-go/services/instance"
+	monitorService "github.com/zhany/ops-go/services/monitor"
 	"log"
 	"os"
 )
@@ -19,6 +20,12 @@ func main() {
 	go instanceService.NewHealthCheckService().Start()
 	// 启动审计录像自动清理服务
 	go instanceService.NewRecordingCleanupService().Start()
+	// 初始化监控告警菜单
+	monitorService.InitMonitorMenu()
+	// 启动主机指标采集服务
+	go monitorService.NewCollectorService().Start()
+	// 启动告警规则评估服务
+	go monitorService.NewEvaluatorService().Start()
 	// 启动Web服务
 	r := routers.Init()
 	err := r.Run(":" + os.Getenv("APP_PORT"))
