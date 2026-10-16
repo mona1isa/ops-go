@@ -20,6 +20,7 @@ type EventFilter struct {
 	Severity   *int8
 	Status     *int8
 	InstanceIp string
+	Source     string
 	StartAt    string
 	EndAt      string
 }
@@ -44,6 +45,14 @@ func (s *EventService) List(pageNum, pageSize int, filter EventFilter) (models.P
 		}
 		if filter.InstanceIp != "" {
 			db = db.Where("instance_ip like ?", "%"+escapeLike(filter.InstanceIp)+"%")
+		}
+		// 默认只看指标告警，避免日志告警混入监控事件页；all 表示不分来源
+		switch filter.Source {
+		case "", models.AlertSourceMonitor:
+			db = db.Where("source IS NULL OR source = '' OR source = ?", models.AlertSourceMonitor)
+		case "all":
+		default:
+			db = db.Where("source = ?", filter.Source)
 		}
 		if filter.StartAt != "" {
 			db = db.Where("created_at >= ?", filter.StartAt)

@@ -4,12 +4,12 @@ import "time"
 
 // 主机执行状态
 const (
-	HostStatusPending  = 1 // 待执行
-	HostStatusRunning  = 2 // 执行中
-	HostStatusSuccess  = 3 // 成功
-	HostStatusFail     = 4 // 失败
-	HostStatusTimeout  = 5 // 超时
-	HostStatusSkipped  = 6 // 跳过
+	HostStatusPending = 1 // 待执行
+	HostStatusRunning = 2 // 执行中
+	HostStatusSuccess = 3 // 成功
+	HostStatusFail    = 4 // 失败
+	HostStatusTimeout = 5 // 超时
+	HostStatusSkipped = 6 // 跳过
 )
 
 // OpsExecutionHost 执行-主机关联

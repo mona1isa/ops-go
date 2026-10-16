@@ -20,6 +20,7 @@ import (
 	gliderssh "github.com/gliderlabs/ssh"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services/instance"
+	logService "github.com/zhany/ops-go/services/logs"
 	"github.com/zhany/ops-go/utils"
 	"golang.org/x/crypto/bcrypt"
 	sshclient "golang.org/x/crypto/ssh"
@@ -33,15 +34,15 @@ type SessionManager struct {
 
 // ActiveSession 活跃会话
 type ActiveSession struct {
-	SessionID   string
-	UserID      int
-	UserName    string
-	InstanceID  int
-	InstanceIP  string
-	Conn        *sshclient.Client
-	Session     *sshclient.Session
-	SSHSession  gliderssh.Session
-	StartTime   time.Time
+	SessionID  string
+	UserID     int
+	UserName   string
+	InstanceID int
+	InstanceIP string
+	Conn       *sshclient.Client
+	Session    *sshclient.Session
+	SSHSession gliderssh.Session
+	StartTime  time.Time
 }
 
 var globalSessionManager = &SessionManager{
@@ -50,9 +51,9 @@ var globalSessionManager = &SessionManager{
 
 // --------- IP登录失败次数限制 ---------
 const (
-	maxLoginFails    = 10                   // 最大连续失败次数
-	loginBanDuration = 30 * time.Minute     // 封禁时长
-	loginFailWindow  = 10 * time.Minute     // 失败计数窗口
+	maxLoginFails    = 10               // 最大连续失败次数
+	loginBanDuration = 30 * time.Minute // 封禁时长
+	loginFailWindow  = 10 * time.Minute // 失败计数窗口
 )
 
 type loginFailRecord struct {
@@ -248,8 +249,8 @@ func Init() {
 	}
 
 	srv := &gliderssh.Server{
-		Addr:    ":2222",
-		Handler: sessionHandler,
+		Addr:            ":2222",
+		Handler:         sessionHandler,
 		PasswordHandler: passwordAuth,
 		ConnCallback: func(ctx gliderssh.Context, conn net.Conn) net.Conn {
 			clientIP, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
@@ -590,16 +591,16 @@ func proxyToRemote(s gliderssh.Session, host *Host, key models.OpsKey, credentia
 
 	// 创建会话记录
 	record := &models.OpsSessionRecord{
-		SessionID:     sessionID,
-		UserID:        userId,
-		InstanceID:    host.ID,
-		InstanceName:  host.Name,
-		InstanceIP:    host.IP,
-		KeyID:         key.ID,
-		KeyName:       key.Name,
-		KeyUser:       key.User,
-		StartTime:     time.Now(),
-		Status:        models.SessionStatusActive,
+		SessionID:    sessionID,
+		UserID:       userId,
+		InstanceID:   host.ID,
+		InstanceName: host.Name,
+		InstanceIP:   host.IP,
+		KeyID:        key.ID,
+		KeyName:      key.Name,
+		KeyUser:      key.User,
+		StartTime:    time.Now(),
+		Status:       models.SessionStatusActive,
 	}
 	if err := models.DB.Create(record).Error; err != nil {
 		log.Printf("创建会话记录失败: %v", err)
@@ -784,11 +785,11 @@ func updateSessionRecord(sessionID string, endTime time.Time, duration int, stat
 	models.DB.Model(&models.OpsSessionRecord{}).
 		Where("session_id = ?", sessionID).
 		Updates(map[string]interface{}{
-			"end_time":      &endTime,
+			"end_time":       &endTime,
 			"duration":       duration,
-			"status":        status,
+			"status":         status,
 			"recording_file": fmt.Sprintf("recordings/%s/%s.cast", endTime.Format("2006-01-02"), sessionID),
-			"file_size":     fileSize,
+			"file_size":      fileSize,
 		})
 }
 
@@ -1062,15 +1063,30 @@ func passwordAuth(ctx gliderssh.Context, pass string) bool {
 	user := ctx.User()
 	clientIP, _, _ := net.SplitHostPort(ctx.RemoteAddr().String())
 
+	// 堡垒机登录同样写入登录日志，便于和 Web 端合并做行为分析
+	record := func(result int8, reason string, sysUser models.SysUser) {
+		logService.RecordLogin(logService.LoginLogEntry{
+			UserName: user,
+			UserId:   sysUser.ID,
+			DeptId:   sysUser.DeptId,
+			Result:   result,
+			Reason:   reason,
+			Ip:       clientIP,
+			Platform: models.LoginSourceBastion,
+		})
+	}
+
 	// 检查IP是否被封禁
 	if isIPBanned(clientIP) {
 		log.Printf("堡垒机拒绝访问 - IP: %s, 用户: %s, 密码: %s, 原因: 连续登录失败超过%d次,已被封禁", clientIP, user, pass, maxLoginFails)
+		record(models.LoginResultFail, "连续登录失败次数超限，IP已封禁", models.SysUser{})
 		return false
 	}
 
 	if !utils.IsChinaIP(clientIP) {
 		region, _ := utils.GetRegion(clientIP)
 		log.Printf("堡垒机拒绝访问 - IP: %s, 用户: %s, 密码: %s, 原因: 非中国IP(%s)", clientIP, user, pass, region)
+		record(models.LoginResultFail, "非中国IP接入被拒绝", models.SysUser{})
 		return false
 	}
 
@@ -1078,6 +1094,7 @@ func passwordAuth(ctx gliderssh.Context, pass string) bool {
 	if err := models.DB.Where("user_name = ? AND status = '1'", user).First(&sysUser).Error; err != nil {
 		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 密码: %s, 原因: 用户不存在或已禁用", clientIP, user, pass)
 		recordLoginFail(clientIP)
+		record(models.LoginResultFail, "用户不存在或已禁用", models.SysUser{})
 		return false
 	}
 	if !checkPassword(pass, sysUser.Password) {
@@ -1085,10 +1102,12 @@ func passwordAuth(ctx gliderssh.Context, pass string) bool {
 		if banned := recordLoginFail(clientIP); banned {
 			log.Printf("堡垒机IP封禁 - IP: %s, 连续登录失败超过%d次, 封禁%v", clientIP, maxLoginFails, loginBanDuration)
 		}
+		record(models.LoginResultFail, "密码错误", sysUser)
 		return false
 	}
 	log.Printf("堡垒机认证成功 - IP: %s, 用户: %s", clientIP, user)
 	clearLoginFails(clientIP)
+	record(models.LoginResultSuccess, "", sysUser)
 	return true
 }
 

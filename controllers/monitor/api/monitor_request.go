@@ -97,6 +97,7 @@ type EventPageRequest struct {
 	Severity   *int8  `json:"severity"`
 	Status     *int8  `json:"status"`
 	InstanceIp string `json:"instanceIp"`
+	Source     string `json:"source"`
 	StartAt    string `json:"startAt"`
 	EndAt      string `json:"endAt"`
 }

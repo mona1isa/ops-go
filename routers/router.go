@@ -26,6 +26,7 @@ func Init() *gin.Engine {
 	sessionRecordRouter := &SessionRecordRouter{}
 	activeSessionRouter := &ActiveSessionRouter{}
 	monitorRouter := &MonitorRouter{}
+	logsRouter := &LogsRouter{}
 	cmdbRouter := &CmdbRouter{}
 	dangerousCommandRouter := &DangerousCommandRouter{}
 	taskTemplateRouter := &TaskTemplateRouter{}
@@ -48,6 +49,7 @@ func Init() *gin.Engine {
 	sessionRecordRouter.Setup(api)
 	activeSessionRouter.Setup(api)
 	monitorRouter.Setup(api)
+	logsRouter.Setup(api)
 	cmdbRouter.Setup(api)
 	dangerousCommandRouter.Setup(api)
 	taskTemplateRouter.Setup(api)

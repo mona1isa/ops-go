@@ -184,6 +184,7 @@ func (c *EventController) PageHandler(ctx *gin.Context) {
 		Severity:   request.Severity,
 		Status:     request.Status,
 		InstanceIp: request.InstanceIp,
+		Source:     request.Source,
 		StartAt:    request.StartAt,
 		EndAt:      request.EndAt,
 	})

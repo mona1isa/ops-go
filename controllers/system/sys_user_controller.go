@@ -5,8 +5,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/zhany/ops-go/controllers"
 	"github.com/zhany/ops-go/controllers/system/api"
+	"github.com/zhany/ops-go/middleware"
+	"github.com/zhany/ops-go/models"
+	logService "github.com/zhany/ops-go/services/logs"
 	"github.com/zhany/ops-go/services/system"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -25,6 +29,7 @@ func (s *SysUserController) LoginHandler(ctx *gin.Context) {
 
 	// 设置登录IP和时间
 	loginRequest.LoginIP = ctx.ClientIP()
+	loginRequest.UserAgent = ctx.Request.UserAgent()
 	now := time.Now()
 	loginRequest.LoginDate = &now
 
@@ -50,6 +55,23 @@ func (s *SysUserController) LoginHandler(ctx *gin.Context) {
 func (s *SysUserController) LogOutHandler(ctx *gin.Context) {
 	service := system.UserService{}
 	tokenString := ctx.GetHeader("Authorization")
+
+	// /api/user/logout 属于免鉴权路径，需要从 Token 反查身份再留痕
+	if claims, err := middleware.ValidateToken(tokenString); err == nil {
+		userId, _ := strconv.Atoi(claims.UserID)
+		deptId, _ := strconv.Atoi(claims.DeptId)
+		logService.RecordLogin(logService.LoginLogEntry{
+			UserName:  claims.Username,
+			UserId:    userId,
+			DeptId:    deptId,
+			Result:    models.LoginResultLogout,
+			Reason:    "用户主动退出",
+			Ip:        ctx.ClientIP(),
+			UserAgent: ctx.Request.UserAgent(),
+			Platform:  models.LoginSourceWeb,
+		})
+	}
+
 	service.LogOut(tokenString)
 	s.JustSuccess(ctx)
 }

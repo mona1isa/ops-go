@@ -15,10 +15,10 @@ func TestMakeRoleName(t *testing.T) {
 		{0, "role_0"},
 		{-1, "role_-1"},
 	}
-	
+
 	// 创建一个临时的 handler 来测试
 	handler := &CasbinHandler{}
-	
+
 	for _, test := range tests {
 		result := handler.MakeRoleName(test.roleId)
 		if result != test.expected {

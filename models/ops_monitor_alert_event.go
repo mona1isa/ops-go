@@ -9,6 +9,12 @@ const (
 	AlertStatusResolved = 3 // 已恢复
 )
 
+// 告警来源：指标告警与日志告警共用同一张事件表，用来源区分便于各自筛选
+const (
+	AlertSourceMonitor = "monitor" // 指标告警
+	AlertSourceLog     = "log"     // 日志告警
+)
+
 // OpsMonitorAlertEvent 告警事件记录
 type OpsMonitorAlertEvent struct {
 	ID           uint64     `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -28,6 +34,7 @@ type OpsMonitorAlertEvent struct {
 	NotifyCount  int        `gorm:"type:int;default:0;comment:累计通知次数" json:"notifyCount"`
 	Suppressed   int        `gorm:"type:int;default:0;comment:累计被冷却/静默抑制的次数" json:"suppressed"`
 	Summary      string     `gorm:"type:varchar(512);comment:告警摘要" json:"summary"`
+	Source       string     `gorm:"type:varchar(16);default:monitor;index;comment:告警来源（monitor 指标 log 日志）" json:"source"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
 }

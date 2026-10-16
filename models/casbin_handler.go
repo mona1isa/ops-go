@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	initOnce   sync.Once
-	initError  error
-	Casbin     *CasbinHandler
+	initOnce  sync.Once
+	initError error
+	Casbin    *CasbinHandler
 )
 
 type CasbinHandler struct {

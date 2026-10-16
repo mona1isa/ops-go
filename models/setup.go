@@ -26,6 +26,7 @@ func InitDB() {
 	tables := []interface{}{
 		&SysUser{},
 		&SysLog{},
+		&SysLoginLog{},
 		&SysRole{},
 		&SysUserRole{},
 		&SysMenu{},
@@ -52,6 +53,8 @@ func InitDB() {
 		&OpsMonitorAlertEvent{},
 		&OpsMonitorNotifyChannel{},
 		&OpsMonitorNotifyLog{},
+		&OpsLogSource{},
+		&OpsLogAlertRule{},
 		&OpsCmdbAsset{},
 		&OpsCmdbTag{},
 		&OpsCmdbAssetTag{},

@@ -9,6 +9,7 @@ import (
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services"
+	logService "github.com/zhany/ops-go/services/logs"
 	"github.com/zhany/ops-go/utils"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -52,6 +53,20 @@ func (u *UserService) BastionLogin(username string, password string) (string, er
 }
 
 func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
+	// 登录日志按「谁、何时、从哪、成功与否」留痕，异步写入不阻塞登录主链路
+	record := func(result int8, reason string, user models.SysUser) {
+		logService.RecordLogin(logService.LoginLogEntry{
+			UserName:  request.Username,
+			UserId:    user.ID,
+			DeptId:    user.DeptId,
+			Result:    result,
+			Reason:    reason,
+			Ip:        request.LoginIP,
+			UserAgent: request.UserAgent,
+			Platform:  models.LoginSourceWeb,
+		})
+	}
+
 	// 验证码校验（根据配置开关决定是否校验）
 	if IsCaptchaEnabled() {
 		captchaService := CaptchaService{}
@@ -61,6 +76,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 		}
 		rs := captchaService.VerifyCaptcha(&capVal)
 		if !rs {
+			record(models.LoginResultFail, "验证码错误", models.SysUser{})
 			return "", errors.New("验证码错误")
 		}
 	}
@@ -69,16 +85,19 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	var user models.SysUser
 	models.DB.First(&user, "user_name=?", username)
 	if user.UserName == "" && user.UserName == username {
+		record(models.LoginResultFail, "用户不存在", models.SysUser{})
 		return "", errors.New("用户不存在")
 	}
 
 	// 用户被禁用后不准登录
 	if strings.EqualFold(user.Status, "0") {
+		record(models.LoginResultFail, "用户被禁用", user)
 		return "", errors.New("用户被禁用，请联系管理员")
 	}
 
 	if err := u.CheckHashPassword(request.Password, user.Password); err != nil {
 		log.Println("密码错误：", err)
+		record(models.LoginResultFail, "密码错误", user)
 		return "", errors.New("密码错误")
 	}
 
@@ -121,6 +140,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	user.LoginIP = request.LoginIP
 	user.LoginDate = &now
 	user.UpdateLoginInfo()
+	record(models.LoginResultSuccess, "", user)
 	return jwt, nil
 }
 

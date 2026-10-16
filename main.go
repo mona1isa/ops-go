@@ -4,8 +4,9 @@ import (
 	"github.com/zhany/ops-go/bastion"
 	"github.com/zhany/ops-go/controllers/instance"
 	"github.com/zhany/ops-go/routers"
-	instanceService "github.com/zhany/ops-go/services/instance"
 	cmdbService "github.com/zhany/ops-go/services/cmdb"
+	instanceService "github.com/zhany/ops-go/services/instance"
+	logService "github.com/zhany/ops-go/services/logs"
 	monitorService "github.com/zhany/ops-go/services/monitor"
 	"log"
 	"os"
@@ -29,6 +30,12 @@ func main() {
 	go monitorService.NewCollectorService().Start()
 	// 启动告警规则评估服务
 	go monitorService.NewEvaluatorService().Start()
+	// 初始化日志中心菜单
+	logService.InitLogMenu()
+	// 启动日志采集服务（SSH 增量拉取 → Loki）
+	go logService.NewLogCollectorService().Start()
+	// 启动日志告警评估服务
+	go logService.NewLogAlertEvaluator().Start()
 	// 启动Web服务
 	r := routers.Init()
 	err := r.Run(":" + os.Getenv("APP_PORT"))

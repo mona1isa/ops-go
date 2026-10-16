@@ -3,13 +3,15 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/zhany/ops-go/controllers/system/api"
 	"github.com/zhany/ops-go/models"
 	"io"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // 自定义 ResponseWriter
@@ -63,9 +65,18 @@ func LogMiddleware() gin.HandlerFunc {
 				sysLog.Params = string(marshal)
 			}
 
-			sysLog.Resp = writer.body.String()
+			respBody := writer.body.String()
+			sysLog.Resp = respBody
 			sysLog.StatusCode = strconv.Itoa(c.Writer.Status())
 			sysLog.CostTimeMs = costTime
+			sysLog.UserAgent = truncate(c.Request.UserAgent(), 512)
+			sysLog.OperateAt = start.Format("2006-01-02 15:04:05")
+			module, operType, sensitive := models.ClassifyOper(c.Request.Method, url.Path)
+			sysLog.OperModule = module
+			sysLog.OperType = operType
+			sysLog.Sensitive = sensitive
+			sysLog.BizCode, sysLog.BizMsg = parseBizResult(respBody)
+
 			if userIdExist {
 				sysLog.CreateBy = userId.(string)
 			}
@@ -82,4 +93,34 @@ func LogMiddleware() gin.HandlerFunc {
 			models.DB.Create(&sysLog)
 		}()
 	}
+}
+
+// parseBizResult 从统一响应体中提取业务码与提示，HTTP 200 但业务失败的操作同样留痕
+func parseBizResult(body string) (code string, msg string) {
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" || !strings.HasPrefix(trimmed, "{") {
+		return "", ""
+	}
+	var envelope struct {
+		Code any `json:"code"`
+		Msg  any `json:"msg"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &envelope); err != nil {
+		return "", ""
+	}
+	if envelope.Code != nil {
+		code = truncate(fmt.Sprint(envelope.Code), 16)
+	}
+	if envelope.Msg != nil {
+		msg = truncate(fmt.Sprint(envelope.Msg), 255)
+	}
+	return code, msg
+}
+
+func truncate(value string, max int) string {
+	runes := []rune(value)
+	if len(runes) <= max {
+		return value
+	}
+	return string(runes[:max])
 }
