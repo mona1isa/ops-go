@@ -26,6 +26,8 @@ func main() {
 	monitorService.InitMonitorMenu()
 	// 初始化资产管理菜单
 	cmdbService.InitCmdbMenu()
+	// 补齐主机管理批量导入按钮权限
+	instanceService.InitInstanceImportMenu()
 	// 启动主机指标采集服务
 	go monitorService.NewCollectorService().Start()
 	// 启动告警规则评估服务

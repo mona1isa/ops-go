@@ -10,11 +10,14 @@ type InstanceRouter struct {
 
 func (*InstanceRouter) Setup(r *gin.RouterGroup) {
 	instanceController := instance.InstanceController{}
+	importController := instance.InstanceImportController{}
 	wsController := instance.WebSocketController{}
 	sftpController := instance.SftpController{}
 	instanceGroup := r.Group("/instance")
 	{
 		instanceGroup.POST("/add", instanceController.AddInstanceHandler)
+		instanceGroup.POST("/import/template", importController.DownloadTemplateHandler)
+		instanceGroup.POST("/import", importController.BatchImportHandler)
 		instanceGroup.POST("/edit", instanceController.EditInstanceHandler)
 		instanceGroup.POST("/changeStatus", instanceController.ChangeStatus)
 		instanceGroup.POST("/list", instanceController.ListInstanceHandler)
