@@ -15,9 +15,7 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 )
 
 type UserService struct {
@@ -52,7 +50,7 @@ func (u *UserService) BastionLogin(username string, password string) (string, er
 	return uid, nil
 }
 
-func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
+func (u *UserService) UserLogin(request api.LoginRequest) (*api.LoginResult, error) {
 	// 登录日志按「谁、何时、从哪、成功与否」留痕，异步写入不阻塞登录主链路
 	record := func(result int8, reason string, user models.SysUser) {
 		logService.RecordLogin(logService.LoginLogEntry{
@@ -77,7 +75,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 		rs := captchaService.VerifyCaptcha(&capVal)
 		if !rs {
 			record(models.LoginResultFail, "验证码错误", models.SysUser{})
-			return "", errors.New("验证码错误")
+			return nil, errors.New("验证码错误")
 		}
 	}
 	// 验证用户信息
@@ -86,62 +84,42 @@ func (u *UserService) UserLogin(request api.LoginRequest) (string, error) {
 	models.DB.First(&user, "user_name=?", username)
 	if user.UserName == "" && user.UserName == username {
 		record(models.LoginResultFail, "用户不存在", models.SysUser{})
-		return "", errors.New("用户不存在")
+		return nil, errors.New("用户不存在")
 	}
 
 	// 用户被禁用后不准登录
 	if strings.EqualFold(user.Status, "0") {
 		record(models.LoginResultFail, "用户被禁用", user)
-		return "", errors.New("用户被禁用，请联系管理员")
+		return nil, errors.New("用户被禁用，请联系管理员")
 	}
 
 	if err := u.CheckHashPassword(request.Password, user.Password); err != nil {
 		log.Println("密码错误：", err)
 		record(models.LoginResultFail, "密码错误", user)
-		return "", errors.New("密码错误")
+		return nil, errors.New("密码错误")
 	}
 
-	// 设置过期时间
-	now := time.Now()
-	exprTime := now.Add(1 * time.Hour)
-	expirationTime := exprTime.Unix()
-	captchaSvc := CaptchaService{}
-	token := captchaSvc.GetUuid()
-	userId := strconv.Itoa(user.ID)
-	deptId := strconv.Itoa(user.DeptId)
-	jwt, err := middleware.GenerateJWT(expirationTime, token, userId, deptId, user.UserName)
+	// MFA 分流：已绑定用户走动态码二次验证；强制模式下未绑定用户先放行、由前端引导绑定
+	mfaSvc := MfaService{}
+	if user.TotpEnabled == 1 {
+		preToken, err := mfaSvc.CreatePreToken(user.ID)
+		if err != nil {
+			log.Println("生成MFA票据失败：", err)
+			return nil, err
+		}
+		record(models.LoginResultFail, "密码通过，等待MFA验证", user)
+		return &api.LoginResult{MfaRequired: true, PreToken: preToken}, nil
+	}
+	if IsMfaRequired() {
+		return &api.LoginResult{BindRequired: true}, nil
+	}
+
+	jwt, err := IssueLoginToken(user, request.LoginIP)
 	if err != nil {
-		log.Println("生成Token异常：", err)
-		return "", errors.New("生成Token异常")
+		return nil, err
 	}
-	// 创建用户Token
-	userToken := models.SysUserToken{
-		UserId:   user.ID,
-		Token:    token,
-		ExpireAt: exprTime,
-	}
-	// 先查询是否存在记录，存在则更新，不存在则创建记录
-	var tokenCount int64
-	models.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Count(&tokenCount)
-	if tokenCount > 0 {
-		if err := models.DB.Model(models.SysUserToken{}).Where("user_id=?", userId).Updates(&userToken).Error; err != nil {
-			log.Println("更新用户Token失败：", err)
-			return "", err
-		}
-	} else {
-		if err := models.DB.Create(&userToken).Error; err != nil {
-			log.Println("创建用户Token失败：", err)
-			return "", err
-		}
-	}
-
-	// 更新用户登录信息
-	now = time.Now()
-	user.LoginIP = request.LoginIP
-	user.LoginDate = &now
-	user.UpdateLoginInfo()
 	record(models.LoginResultSuccess, "", user)
-	return jwt, nil
+	return &api.LoginResult{Token: jwt}, nil
 }
 
 // LogOut 退出登录
@@ -176,20 +154,22 @@ func (u *UserService) GetUserInfo(userId string) (*api.UserInfo, error) {
 	perms := GetUserPerms(userId)
 	loginDate := user.LoginDate.Format("2006-01-02 15:04:05")
 	userInfo := &api.UserInfo{
-		Id:        user.ID,
-		DeptId:    user.DeptId,
-		UserName:  user.UserName,
-		Nickname:  user.NickName,
-		Email:     user.Email,
-		Phone:     user.Phone,
-		Sex:       user.Sex,
-		Avatar:    user.Avatar,
-		Status:    user.Status,
-		IpAddr:    user.LoginIP,
-		LoginDate: loginDate,
-		RoleIds:   roleIds,
-		RoleNames: roleNames,
-		Perms:     perms,
+		Id:          user.ID,
+		DeptId:      user.DeptId,
+		UserName:    user.UserName,
+		Nickname:    user.NickName,
+		Email:       user.Email,
+		Phone:       user.Phone,
+		Sex:         user.Sex,
+		Avatar:      user.Avatar,
+		Status:      user.Status,
+		IpAddr:      user.LoginIP,
+		LoginDate:   loginDate,
+		RoleIds:     roleIds,
+		RoleNames:   roleNames,
+		Perms:       perms,
+		MfaEnabled:  user.TotpEnabled == 1,
+		MfaRequired: IsMfaRequired(),
 	}
 
 	return userInfo, nil

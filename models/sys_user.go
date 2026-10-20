@@ -20,8 +20,12 @@ type SysUser struct {
 	Status    string     `gorm:"type:varchar(1);default:0;comment:帐号状态（1正常 0停用）" json:"status"`
 	LoginIP   string     `gorm:"type:varchar(128);comment:登录IP" json:"loginIP"`
 	LoginDate *time.Time `gorm:"comment:登录时间" json:"loginDate"`
-	RoleNames string     `gorm:"-" json:"roleNames"`
-	RoleIds   []int      `gorm:"-" json:"roleIds"`
+	// MFA/TOTP 双因素登录：secret 为 AES-GCM+RSA 混合加密后的 base64，恢复码为 bcrypt 哈希 JSON 数组
+	TotpSecret    string `gorm:"column:totp_secret;type:varchar(512);comment:TOTP密钥（加密存储）" json:"-"`
+	TotpEnabled   int8   `gorm:"column:totp_enabled;type:tinyint;default:0;comment:MFA状态（0未绑定 1已启用）" json:"totpEnabled"`
+	RecoveryCodes string `gorm:"column:recovery_codes;type:text;comment:一次性恢复码（bcrypt哈希JSON数组）" json:"-"`
+	RoleNames     string `gorm:"-" json:"roleNames"`
+	RoleIds       []int  `gorm:"-" json:"roleIds"`
 	Base
 }
 

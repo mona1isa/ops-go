@@ -12,7 +12,12 @@ func (*UserRouter) Setup(r *gin.RouterGroup) {
 	userGroup := r.Group("/user")
 	{
 		userGroup.POST("/login", uc.LoginHandler)
+		userGroup.POST("/login/mfa", uc.MfaLoginHandler)
 		userGroup.GET("/logout", uc.LogOutHandler)
+		userGroup.GET("/mfa/status", uc.MfaStatusHandler)
+		userGroup.POST("/mfa/bind/start", uc.MfaBindStartHandler)
+		userGroup.POST("/mfa/bind/confirm", uc.MfaBindConfirmHandler)
+		userGroup.POST("/mfa/unbind", uc.MfaUnbindHandler)
 		userGroup.GET("/info", uc.UserInfoHandler)
 		userGroup.POST("/add", uc.AddUserHandler)
 		userGroup.POST("/updatePersonalInfo", uc.UpdatePersonalInfo)

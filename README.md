@@ -154,6 +154,12 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - 登录图形验证码
 - 防止暴力破解与自动化攻击
 
+### 20.1 MFA 双因素登录（TOTP）
+- 密码校验通过后进入动态码二次验证（Google Authenticator / FreeOTP / Microsoft Authenticator 兼容，RFC 6238）
+- 个人中心扫码或手动输入密钥绑定，成功后一次性下发 10 个恢复码（防手机丢失锁死，每个仅可用一次）
+- 环境变量 `MFA_REQUIRED` 控制强制策略：默认关闭为自愿绑定，开启后未绑定用户登录会被引导至绑定页
+- preToken 二次验证含 5 次失败作废防爆破；密钥加密落库，恢复码 bcrypt 哈希存储
+
 ### 21. 监控采集
 - 采集目标管理（增删改查、启停、手动/自动同步纳管主机）
 - SSH 定时下发采集脚本，采集 CPU、内存、磁盘、网络指标
@@ -257,7 +263,7 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - [ ] 定时任务 / Cron 作业调度
 - [ ] 录像对象存储（OSS/S3）
 - [ ] RDP/VNC 协议支持
-- [ ] 多因素认证（MFA/2FA）
+- [x] 多因素认证（MFA/2FA）— Web 端 TOTP 双因素已实现（`utils/totp/`、`services/system/mfa_service.go`，环境变量 `MFA_REQUIRED` 控制强制策略；SSH 堡垒机二次验证待后续）
 - [ ] 登录安全增强（异地登录检测、设备指纹、全量 UA 识别库）
 
 ### 长期规划 (v2.0)
@@ -474,6 +480,9 @@ JWT_SECRET=your-jwt-secret-change-me
 
 # 登录图形验证码（默认关闭，需显式开启）
 CAPTCHA_ENABLED=false
+
+# MFA/TOTP 双因素强制策略（false=自愿绑定，true=未绑定用户登录后强制跳转绑定页）
+MFA_REQUIRED=false
 
 # 会话录像保留天数（超期由后台清理协程删除）
 RECORDING_RETENTION_DAYS=30
@@ -872,6 +881,7 @@ exit     # 退出
 | 任务执行 | `/api/task-execution/*` | 任务执行与记录 |
 | 文件管理 | `/api/sftp/*` | SFTP 文件操作 |
 | 验证码 | `/api/captcha/*` | 图形验证码 |
+| MFA 双因素 | `/api/user/login/mfa`、`/api/user/mfa/*` | TOTP 二次验证与绑定/解绑/状态 |
 | 监控采集 | `/api/monitor/target/*` | 采集目标管理 |
 | 告警规则 | `/api/monitor/rule/*` | 规则管理、静默、试算 |
 | 告警事件 | `/api/monitor/event/*` | 事件查询与确认 |

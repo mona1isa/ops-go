@@ -70,18 +70,20 @@ type UpdatePasswordRequest struct {
 }
 
 type UserInfo struct {
-	Id        int      `json:"id"`
-	DeptId    int      `json:"deptId"`
-	UserName  string   `json:"username"`
-	Nickname  string   `json:"nickname"`
-	Email     string   `json:"email"`
-	Phone     string   `json:"phone"`
-	Sex       int      `json:"sex"`
-	Avatar    string   `json:"avatar"`
-	Status    string   `json:"status"`
-	IpAddr    string   `json:"ipAddr"`
-	LoginDate string   `json:"loginDate"`
-	RoleIds   []int    `json:"roleIds"`
-	RoleNames string   `json:"roleNames"`
-	Perms     []string `json:"perms"`
+	Id          int      `json:"id"`
+	DeptId      int      `json:"deptId"`
+	UserName    string   `json:"username"`
+	Nickname    string   `json:"nickname"`
+	Email       string   `json:"email"`
+	Phone       string   `json:"phone"`
+	Sex         int      `json:"sex"`
+	Avatar      string   `json:"avatar"`
+	Status      string   `json:"status"`
+	IpAddr      string   `json:"ipAddr"`
+	LoginDate   string   `json:"loginDate"`
+	RoleIds     []int    `json:"roleIds"`
+	RoleNames   string   `json:"roleNames"`
+	Perms       []string `json:"perms"`
+	MfaEnabled  bool     `json:"mfaEnabled"`  // 是否已绑定 MFA（登录引导与个人中心展示）
+	MfaRequired bool     `json:"mfaRequired"` // 系统是否强制启用 MFA
 }

@@ -1,8 +1,7 @@
 -- Ops-Go 数据库初始化 DDL（由 cmd/sqldump 从运行库导出，共 39 张表）
--- 生成时间: 2026-10-20 13:37:24
+-- 生成时间: 2026-10-20 17:03:37
 -- 执行: mysql -u<user> -p < ops-go.sql
--- 警告: 本文件含 DROP TABLE IF EXISTS，仅适用于全新环境初始化；已有数据的环境请勿直接执行
--- 说明: 应用启动时 GORM AutoMigrate 也会自动建表/增列，本文件供一键初始化使用
+-- 说明: 应用启动时 GORM AutoMigrate 也会建表，本文件供全新环境一键初始化
 
 CREATE DATABASE IF NOT EXISTS `ops-go` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 USE `ops-go`;
@@ -293,7 +292,7 @@ CREATE TABLE `ops_log_source` (
   `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
   PRIMARY KEY (`id`),
   KEY `idx_log_source_instance` (`instance_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `ops_monitor_alert_event`;
 CREATE TABLE `ops_monitor_alert_event` (
@@ -619,7 +618,7 @@ CREATE TABLE `sys_log` (
   KEY `idx_sys_log_oper_module` (`oper_module`),
   KEY `idx_sys_log_oper_type` (`oper_type`),
   KEY `idx_sys_log_sensitive` (`sensitive`)
-) ENGINE=InnoDB AUTO_INCREMENT=62803 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=63208 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `sys_login_log`;
 CREATE TABLE `sys_login_log` (
@@ -641,7 +640,7 @@ CREATE TABLE `sys_login_log` (
   KEY `idx_sys_login_log_result` (`result`),
   KEY `idx_sys_login_log_ip_addr` (`ip_addr`),
   KEY `idx_sys_login_log_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=34629 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=37714 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `sys_menu`;
 CREATE TABLE `sys_menu` (
@@ -714,6 +713,9 @@ CREATE TABLE `sys_user` (
   `update_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '修改人ID',
   `del_flag` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT '0' COMMENT '删除标识（0正常 1 已删除）',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `totp_secret` varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'TOTP密钥（加密存储）',
+  `totp_enabled` tinyint DEFAULT '0' COMMENT 'MFA状态（0未绑定 1已启用）',
+  `recovery_codes` text COLLATE utf8mb4_general_ci COMMENT '一次性恢复码（bcrypt哈希JSON数组）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uni_sys_user_user_name` (`user_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

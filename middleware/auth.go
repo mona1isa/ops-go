@@ -30,6 +30,7 @@ var secret = os.Getenv("JWT_SECRET")
 var PublicPaths = []string{
 	"/api/captcha/generate",
 	"/api/user/login",
+	"/api/user/login/mfa",
 	"/api/user/logout",
 	"/api/instance/terminal",
 }

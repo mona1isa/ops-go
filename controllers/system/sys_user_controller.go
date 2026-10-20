@@ -11,6 +11,7 @@ import (
 	"github.com/zhany/ops-go/services/system"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,7 +35,7 @@ func (s *SysUserController) LoginHandler(ctx *gin.Context) {
 	loginRequest.LoginDate = &now
 
 	service := system.UserService{}
-	jwt, err := service.UserLogin(loginRequest)
+	result, err := service.UserLogin(loginRequest)
 	if err != nil {
 		msg := gin.H{
 			"code": http.StatusBadRequest,
@@ -43,12 +44,108 @@ func (s *SysUserController) LoginHandler(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, msg)
 		return
 	}
-	result := map[string]any{
+	resp := map[string]any{
+		"code": 200,
+		"msg":  "success",
+	}
+	if result.Token != "" {
+		resp["token"] = result.Token
+	}
+	if result.MfaRequired {
+		resp["mfaRequired"] = true
+		resp["preToken"] = result.PreToken
+	}
+	if result.BindRequired {
+		resp["bindRequired"] = true
+	}
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// MfaLoginHandler 登录第二步：动态验证码 / 恢复码
+func (s *SysUserController) MfaLoginHandler(ctx *gin.Context) {
+	request := api.MfaLoginRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": http.StatusBadRequest, "msg": err.Error()})
+		return
+	}
+	request.PreToken = strings.TrimSpace(request.PreToken)
+
+	service := system.MfaService{}
+	jwt, err := service.MfaLogin(request, ctx.ClientIP())
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"code": http.StatusBadRequest, "msg": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{
 		"code":  200,
 		"msg":   "success",
 		"token": jwt,
+	})
+}
+
+// MfaStatusHandler 当前用户 MFA 状态
+func (s *SysUserController) MfaStatusHandler(ctx *gin.Context) {
+	mfaSvc := system.MfaService{}
+	userId, _ := strconv.Atoi(s.GetUserId(ctx))
+	enabled, required := mfaSvc.Status(userId)
+	s.Success(ctx, gin.H{"enabled": enabled, "required": required})
+}
+
+// MfaBindStartHandler 发起绑定：返回密钥与 otpauth URI
+func (s *SysUserController) MfaBindStartHandler(ctx *gin.Context) {
+	mfaSvc := system.MfaService{}
+	userId, _ := strconv.Atoi(s.GetUserId(ctx))
+	if userId <= 0 {
+		s.Failure(ctx, http.StatusBadRequest, "用户未登录")
+		return
 	}
-	ctx.JSON(http.StatusOK, result)
+	secret, url, err := mfaSvc.BeginBind(userId)
+	if err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.Success(ctx, gin.H{"secret": secret, "otpauthUrl": url})
+}
+
+// MfaBindConfirmHandler 确认绑定：校验动态码并返回一次性恢复码
+func (s *SysUserController) MfaBindConfirmHandler(ctx *gin.Context) {
+	request := api.MfaConfirmRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	mfaSvc := system.MfaService{}
+	userId, _ := strconv.Atoi(s.GetUserId(ctx))
+	if userId <= 0 {
+		s.Failure(ctx, http.StatusBadRequest, "用户未登录")
+		return
+	}
+	codes, err := mfaSvc.ConfirmBind(userId, request.Code)
+	if err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.Success(ctx, gin.H{"recoveryCodes": codes})
+}
+
+// MfaUnbindHandler 解绑：验证当前密码后清除 MFA 设置
+func (s *SysUserController) MfaUnbindHandler(ctx *gin.Context) {
+	request := api.MfaUnbindRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	mfaSvc := system.MfaService{}
+	userId, _ := strconv.Atoi(s.GetUserId(ctx))
+	if userId <= 0 {
+		s.Failure(ctx, http.StatusBadRequest, "用户未登录")
+		return
+	}
+	if err := mfaSvc.Unbind(userId, request.Password); err != nil {
+		s.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.JustSuccess(ctx)
 }
 
 // LogOutHandler 登出
