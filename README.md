@@ -348,6 +348,9 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 
 ## 项目截图
 
+### 登录
+![登录](./docs/images/login.png)
+
 ### 主机管理
 ![首页](./docs/images/首页.png)
 ![主机列表](./docs/images/主机列表.png)
