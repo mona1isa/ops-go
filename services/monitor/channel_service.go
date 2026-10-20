@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services/monitor/mail"
+	"github.com/zhany/ops-go/services/monitor/robot"
 	"gorm.io/gorm"
 )
 
@@ -84,6 +86,9 @@ func (s *ChannelService) Edit(channel *models.OpsMonitorNotifyChannel) error {
 	}
 	if strings.TrimSpace(channel.Secret) == "" || channel.Secret == SecretMask {
 		channel.Secret = existing.Secret
+	}
+	if channel.Type == models.ChannelTypeEmail {
+		channel.Headers = mail.RestorePassword(channel.Headers, existing.Headers, SecretMask)
 	}
 	if err := validateChannel(channel); err != nil {
 		return err
@@ -166,28 +171,46 @@ func validateChannel(channel *models.OpsMonitorNotifyChannel) error {
 	if len([]rune(channel.Name)) > 128 {
 		return errors.New("渠道名称过长")
 	}
-	if channel.Url == "" {
-		return errors.New("通知地址不能为空")
-	}
-	if !strings.HasPrefix(channel.Url, "http://") && !strings.HasPrefix(channel.Url, "https://") {
-		return errors.New("通知地址仅支持 http/https")
-	}
-	if len(channel.Url) > 512 {
-		return errors.New("通知地址过长")
-	}
 	switch channel.Type {
 	case models.ChannelTypeWebhook:
-	case models.ChannelTypeEmail, models.ChannelTypeDingTalk, models.ChannelTypeWeCom:
-		return errors.New("该通知类型尚未支持，本轮请使用 Webhook")
+		if channel.Url == "" {
+			return errors.New("通知地址不能为空")
+		}
+		if !strings.HasPrefix(channel.Url, "http://") && !strings.HasPrefix(channel.Url, "https://") {
+			return errors.New("通知地址仅支持 http/https")
+		}
+		if len(channel.Url) > 512 {
+			return errors.New("通知地址过长")
+		}
+	case models.ChannelTypeDingTalk, models.ChannelTypeWeCom, models.ChannelTypeFeishu:
+		if err := robot.ValidateUrl(robot.Kind(channel.Type), channel.Url); err != nil {
+			return err
+		}
+		if channel.Type == models.ChannelTypeWeCom {
+			channel.Secret = ""
+		}
+	case models.ChannelTypeEmail:
+		if _, err := mail.ParseConfig(channel.Headers); err != nil {
+			return err
+		}
+		if _, err := mail.SplitRecipients(channel.Url); err != nil {
+			return err
+		}
+		if len(channel.Url) > 512 {
+			return errors.New("收件人列表过长")
+		}
+		channel.Secret = ""
 	default:
 		return errors.New("通知渠道类型不合法")
 	}
-	if headers := strings.TrimSpace(channel.Headers); headers != "" {
-		parsed := map[string]string{}
-		if err := json.Unmarshal([]byte(headers), &parsed); err != nil {
-			return errors.New("自定义请求头需为 JSON 对象，如 {\"X-Team\":\"sre\"}")
+	if channel.Type == models.ChannelTypeWebhook {
+		if headers := strings.TrimSpace(channel.Headers); headers != "" {
+			parsed := map[string]string{}
+			if err := json.Unmarshal([]byte(headers), &parsed); err != nil {
+				return errors.New("自定义请求头需为 JSON 对象，如 {\"X-Team\":\"sre\"}")
+			}
+			channel.Headers = headers
 		}
-		channel.Headers = headers
 	}
 	if len(channel.Secret) > 255 {
 		return errors.New("签名密钥过长")
@@ -203,5 +226,8 @@ func maskSecret(channel *models.OpsMonitorNotifyChannel) {
 		channel.Secret = SecretMask
 	} else {
 		channel.Secret = ""
+	}
+	if channel.Type == models.ChannelTypeEmail {
+		channel.Headers = mail.MaskPassword(channel.Headers, SecretMask)
 	}
 }

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/zhany/ops-go/models"
+	"github.com/zhany/ops-go/services/monitor/mail"
+	"github.com/zhany/ops-go/services/monitor/robot"
 	"github.com/zhany/ops-go/services/monitor/webhook"
 	"gorm.io/gorm"
 )
@@ -44,16 +46,11 @@ func (n *NotifierService) Dispatch(ctx context.Context, event *models.OpsMonitor
 		return 0
 	}
 	payload := n.buildPayload(event, recovered)
-	body, err := webhook.BuildBody(payload)
-	if err != nil {
-		log.Printf("序列化告警通知内容失败 event=%d: %v", event.ID, err)
-		return 0
-	}
 
 	success := 0
 	for i := range channels {
 		channel := channels[i]
-		if err := n.sendToChannel(ctx, event, &channel, body, recovered); err != nil {
+		if err := n.sendToChannel(ctx, event, &channel, payload, recovered); err != nil {
 			log.Printf("告警通知投递失败 event=%d channel=%d: %v", event.ID, channel.ID, err)
 			continue
 		}
@@ -62,36 +59,65 @@ func (n *NotifierService) Dispatch(ctx context.Context, event *models.OpsMonitor
 	return success
 }
 
-// sendToChannel 单个渠道投递，失败由 webhook.Dispatch 内部重试，每次尝试落一条通知日志
-func (n *NotifierService) sendToChannel(ctx context.Context, event *models.OpsMonitorAlertEvent, channel *models.OpsMonitorNotifyChannel, body []byte, recovered bool) error {
-	if channel.Type != models.ChannelTypeWebhook {
+// sendToChannel 单个渠道投递，失败由各自 Dispatch 内部重试，每次尝试落一条通知日志
+func (n *NotifierService) sendToChannel(ctx context.Context, event *models.OpsMonitorAlertEvent, channel *models.OpsMonitorNotifyChannel, payload *webhook.Payload, recovered bool) error {
+	onAttempt := func(item webhook.Attempt) {
+		n.saveLog(event, channel, item, recovered, payload)
+	}
+	switch channel.Type {
+	case models.ChannelTypeWebhook:
+		body, err := webhook.BuildBody(payload)
+		if err != nil {
+			return err
+		}
+		request := &webhook.Request{
+			Url:     channel.Url,
+			Secret:  channel.Secret,
+			Headers: parseHeaders(channel.Headers),
+			Body:    body,
+			EventId: event.ID,
+		}
+		attempt, err := webhook.Dispatch(ctx, request, onAttempt)
+		if err != nil {
+			return err
+		}
+		if !attempt.Success {
+			return errors.New("通知渠道未成功接收")
+		}
+		return nil
+	case models.ChannelTypeDingTalk, models.ChannelTypeWeCom, models.ChannelTypeFeishu:
+		attempt, err := robot.Dispatch(ctx, robot.Kind(channel.Type), payload, channel.Url, channel.Secret, webhook.MaxAttempts, onAttempt)
+		if err != nil {
+			return err
+		}
+		if !attempt.Success {
+			return errors.New(attempt.ErrorMsg)
+		}
+		return nil
+	case models.ChannelTypeEmail:
+		cfg, err := mail.ParseConfig(channel.Headers)
+		if err != nil {
+			return err
+		}
+		recipients, err := mail.SplitRecipients(channel.Url)
+		if err != nil {
+			return err
+		}
+		attempt, err := mail.Send(ctx, cfg, recipients, payload, webhook.MaxAttempts, onAttempt)
+		if err != nil {
+			return err
+		}
+		if !attempt.Success {
+			return errors.New(attempt.ErrorMsg)
+		}
+		return nil
+	default:
 		return fmt.Errorf("未支持的通知渠道类型: %d", channel.Type)
 	}
-
-	request := &webhook.Request{
-		Url:     channel.Url,
-		Secret:  channel.Secret,
-		Headers: parseHeaders(channel.Headers),
-		Body:    body,
-		EventId: event.ID,
-	}
-	attempt, err := webhook.Dispatch(ctx, request, func(item webhook.Attempt) {
-		n.saveLog(event, channel, item, recovered, body)
-	})
-	if err != nil {
-		return err
-	}
-	if !attempt.Success {
-		return errors.New("通知渠道未成功接收")
-	}
-	return nil
 }
 
 // TestSend 渠道试发送，不落告警事件，仅返回投递结果描述
 func (n *NotifierService) TestSend(ctx context.Context, channel *models.OpsMonitorNotifyChannel) (bool, string, error) {
-	if channel.Type != models.ChannelTypeWebhook {
-		return false, "", fmt.Errorf("未支持的通知渠道类型")
-	}
 	payload := &webhook.Payload{
 		EventId:      0,
 		RuleName:     "通知渠道连通性测试",
@@ -104,21 +130,54 @@ func (n *NotifierService) TestSend(ctx context.Context, channel *models.OpsMonit
 		FiredAt:      time.Now().Format("2006-01-02 15:04:05"),
 		Labels:       map[string]string{},
 	}
-	body, err := webhook.BuildBody(payload)
-	if err != nil {
-		return false, "", err
+	switch channel.Type {
+	case models.ChannelTypeWebhook:
+		body, err := webhook.BuildBody(payload)
+		if err != nil {
+			return false, "", err
+		}
+		request := &webhook.Request{
+			Url:     channel.Url,
+			Secret:  channel.Secret,
+			Headers: parseHeaders(channel.Headers),
+			Body:    body,
+		}
+		attempt, err := webhook.Dispatch(ctx, request, nil)
+		if err != nil {
+			return false, "", err
+		}
+		return attempt.Success, fmt.Sprintf("HTTP %d %s", attempt.StatusCode, truncate(attempt.Body, 200)), nil
+	case models.ChannelTypeDingTalk, models.ChannelTypeWeCom, models.ChannelTypeFeishu:
+		attempt, err := robot.Dispatch(ctx, robot.Kind(channel.Type), payload, channel.Url, channel.Secret, 1, nil)
+		if err != nil {
+			return false, "", err
+		}
+		message := truncate(attempt.Body, 200)
+		if attempt.ErrorMsg != "" {
+			message = attempt.ErrorMsg
+		}
+		return attempt.Success, message, nil
+	case models.ChannelTypeEmail:
+		cfg, err := mail.ParseConfig(channel.Headers)
+		if err != nil {
+			return false, "", err
+		}
+		recipients, err := mail.SplitRecipients(channel.Url)
+		if err != nil {
+			return false, "", err
+		}
+		attempt, err := mail.Send(ctx, cfg, recipients, payload, 1, nil)
+		if err != nil {
+			return false, "", err
+		}
+		message := attempt.Body
+		if attempt.ErrorMsg != "" {
+			message = attempt.ErrorMsg
+		}
+		return attempt.Success, message, nil
+	default:
+		return false, "", fmt.Errorf("未支持的通知渠道类型")
 	}
-	request := &webhook.Request{
-		Url:     channel.Url,
-		Secret:  channel.Secret,
-		Headers: parseHeaders(channel.Headers),
-		Body:    body,
-	}
-	attempt, err := webhook.Dispatch(ctx, request, nil)
-	if err != nil {
-		return false, "", err
-	}
-	return attempt.Success, fmt.Sprintf("HTTP %d %s", attempt.StatusCode, truncate(attempt.Body, 200)), nil
 }
 
 func (n *NotifierService) buildPayload(event *models.OpsMonitorAlertEvent, recovered bool) *webhook.Payload {
@@ -149,7 +208,8 @@ func (n *NotifierService) buildPayload(event *models.OpsMonitorAlertEvent, recov
 	}
 }
 
-func (n *NotifierService) saveLog(event *models.OpsMonitorAlertEvent, channel *models.OpsMonitorNotifyChannel, attempt webhook.Attempt, recovered bool, body []byte) {
+func (n *NotifierService) saveLog(event *models.OpsMonitorAlertEvent, channel *models.OpsMonitorNotifyChannel, attempt webhook.Attempt, recovered bool, payload *webhook.Payload) {
+	body, _ := webhook.BuildBody(payload)
 	record := &models.OpsMonitorNotifyLog{
 		EventId:      event.ID,
 		RuleId:       event.RuleId,

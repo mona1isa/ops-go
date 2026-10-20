@@ -81,6 +81,31 @@ func BuildBody(payload *Payload) ([]byte, error) {
 	return json.Marshal(payload)
 }
 
+// RenderText 渲染纯文本告警正文，供邮件与机器人渠道共用
+func RenderText(p *Payload) string {
+	var lines []string
+	lines = append(lines, fmt.Sprintf("【%s】%s", p.SeverityText, p.Summary))
+	lines = append(lines,
+		fmt.Sprintf("状态: %s", statusText(p.Status, p.Recovered)),
+		fmt.Sprintf("规则: %s", p.RuleName),
+		fmt.Sprintf("主机: %s", p.Instance),
+	)
+	if p.Metric != "" && p.Metric != "-" {
+		lines = append(lines, fmt.Sprintf("指标: %s 当前值: %g 阈值: %g", p.Metric, p.Value, p.Threshold))
+	}
+	if p.FiredAt != "" {
+		lines = append(lines, fmt.Sprintf("时间: %s", p.FiredAt))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func statusText(status string, recovered bool) string {
+	if recovered || status == "resolved" {
+		return "已恢复"
+	}
+	return "告警中"
+}
+
 // Sign 计算 HMAC-SHA256 签名，返回 sha256=<hex> 形式
 func Sign(secret string, body []byte) string {
 	mac := hmac.New(sha256.New, []byte(secret))
