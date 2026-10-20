@@ -10,7 +10,7 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - 🔐 **SSH 堡垒机** - 独立的 SSH 服务（端口 2222），支持命令行交互式操作；连续登录失败自动封禁 IP、非中国 IP 接入拒绝、来源归属地解析（ip2region）
 - 🛡️ **高危指令拦截** - 实时检测并阻止危险命令执行，支持精确/前缀/正则三种匹配模式，内置 14 条防护规则，管理员豁免
 - 📹 **会话录像** - 自动录制所有 SSH 会话，支持在线回放和下载，按保留天数自动清理
-- 📊 **监控告警** - SSH 采集主机指标（CPU/内存/磁盘/网络）写入 Prometheus，自研 ECharts 实时面板，阈值规则评估 + Webhook 告警通知（HMAC 签名、重试、静默与冷却）
+- 📊 **监控告警** - SSH 采集主机指标（CPU/内存/磁盘/网络）写入 Prometheus，自研 ECharts 实时面板，阈值规则评估 + 多渠道告警通知（Webhook HMAC 签名、邮件 SMTP、钉钉/企业微信/飞书机器人，失败重试、静默与冷却）
 - 📗 **日志中心** - 复用堡垒机 SSH 通道增量拉取远程日志（目标机零 Agent）写入 Loki，提供类 Kibana 检索界面（多关键字高亮、时间分布直方图、实时 tail、上下文查看、CSV 导出）与日志告警规则，告警事件与通知链路复用监控模块
 - 🗂️ **CMDB 资产管理** - 六类资产模型台账、生命周期流转、标签管理、ECharts 关系拓扑图、IP 网段管理（IPAM）
 - ⚙️ **批量任务执行** - 脚本库、任务模板与可视化编排，支持命令/脚本/文件分发五种执行方式
@@ -173,8 +173,9 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 
 ### 24. 通知渠道
 - Webhook 渠道：HMAC 签名、失败重试、通知日志落库（ops_monitor_notify_log）
-- 渠道测试发送与启停管理
-- 邮件/钉钉/企业微信渠道已预留模型常量，发送能力待实现
+- 邮件渠道：SMTP 投递（SSL 465 / STARTTLS / 明文，AUTH PLAIN / LOGIN，中文主题 RFC2047 编码），SMTP 参数存渠道表 headers 列、收件人存 url 列，密码掩码回显
+- 钉钉 / 企业微信 / 飞书机器人：markdown / 交互卡片消息，钉钉 timestamp+sign 加签、飞书 X-Lark-Signature 签名，响应体业务码（errcode/code）判定，地址强制官方域名白名单防 SSRF，每次重试重新签名
+- 渠道测试发送与启停管理；监控与日志告警共用同一套渠道与通知链路
 
 ### 25. CMDB 资产台账
 - 预置六类资产模型：服务器、网络设备、数据库、中间件、域名、SSL 证书
@@ -228,7 +229,7 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 
 ## 未来规划
 
-> 当前迭代重点：监控告警侧还剩两项缺口 —— **通知渠道扩展**（邮件/钉钉/企业微信，模型常量已预留）与 **告警增强**（多条件组合、告警升级策略）。核心可观测性链路（指标 + 日志 + 告警 + 通知）已闭环，后续按下列优先级扩展场景。
+> 当前迭代重点：可观测性链路（指标 + 日志 + 告警 + 多渠道通知）已全部闭环，监控侧仅剩 **告警增强**（多条件组合、告警升级策略）一项缺口，后续按下列优先级扩展场景。
 
 ### 短期规划 (v1.1)
 - [x] 局域网主机扫描与批量录入
@@ -244,9 +245,9 @@ Ops-Go 是一个基于 Go 语言开发的企业级运维管理系统，提供主
 - [x] CMDB 资产管理（台账 / 拓扑 / 标签 / IPAM）
 - [x] 日志中心（SSH 增量采集 / Loki 存储 / 检索界面 / 日志告警）
 - [x] 审计日志增强（登录日志、敏感操作留痕、行为分析）
+- [x] 通知渠道扩展（邮件 / 钉钉 / 企业微信 / 飞书，2026-10-20）
 
 ### 中期规划 (v1.2)
-- [ ] 通知渠道扩展（邮件 / 钉钉 / 企业微信）
 - [ ] 告警增强：多条件组合告警、告警升级策略（escalation）
 - [ ] 日志与登录日志保留期清理策略（按合规要求配置保留天数）
 - [ ] 日志采集增强：容器标准输出 / systemd journal 来源、更多级别解析规则
@@ -416,15 +417,30 @@ git clone https://github.com/mona1isa/ops-go-ui.git
 
 ### 2. 数据库准备
 
+方式一：一键执行初始化 DDL（推荐，含全部 39 张表的建表语句）
+
+```bash
+# sql/ops-go.sql 由 ops-go/cmd/sqldump 从运行库导出，含 CREATE DATABASE + DROP TABLE IF EXISTS + CREATE TABLE
+# 仅适用于全新环境；已有数据的环境请勿直接执行
+mysql -u<user> -p < sql/ops-go.sql
+```
+
+方式二：手工建库，交由应用启动时 GORM AutoMigrate 自动建表
+
 ```sql
 -- 创建数据库
-CREATE DATABASE ops_go DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE DATABASE `ops-go` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 -- 创建用户（可选）
 CREATE USER 'ops_go'@'%' IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON ops_go.* TO 'ops_go'@'%';
+GRANT ALL PRIVILEGES ON `ops-go`.* TO 'ops_go'@'%';
 FLUSH PRIVILEGES;
 ```
+
+> 重新生成 DDL（表结构变更后同步本文件）：
+> ```bash
+> cd ops-go && go run ./cmd/sqldump > ../sql/ops-go.sql
+> ```
 
 ### 3. 后端配置
 
@@ -541,7 +557,7 @@ npm run dev
 
 ```sql
 -- 连接数据库
-USE ops_go;
+USE `ops-go`;
 
 -- 创建管理员用户（密码: admin123）
 INSERT INTO sys_user (user_name, nick_name, password, status, created_at, updated_at)
@@ -690,8 +706,9 @@ ops-go/
 ├── bastion/              # SSH 堡垒机模块
 │   └── bastion.go        # SSH 服务器实现（登录失败封禁、地域策略、会话接管）
 ├── cmd/                  # 命令行工具
-│   └── bastion/
-│       └── hostkey.pem   # SSH 主机密钥
+│   ├── bastion/
+│   │   └── hostkey.pem   # SSH 主机密钥
+│   └── sqldump/          # 从运行库导出全量 DDL（go run ./cmd/sqldump > sql/ops-go.sql）
 ├── config/               # 配置文件（Redis/Casbin 模型与策略）
 ├── controllers/          # 控制器层
 │   ├── instance/         # 实例相关接口（主机、凭证、终端、SFTP、脚本、任务、会话等）
@@ -712,13 +729,16 @@ ops-go/
 ├── routers/              # 路由配置（monitor_router / logs_router / cmdb_router 等）
 ├── services/             # 业务逻辑层
 │   ├── instance/         # 实例服务（主机、SFTP、任务引擎、会话、健康检查、录像清理等）
-│   ├── monitor/          # 监控服务（采集、Prometheus 数据源、规则评估、Webhook 通知）
+│   ├── monitor/          # 监控服务（采集、Prometheus 数据源、规则评估、通知分派）
 │   │   ├── datasource/   # Prometheus / Pushgateway 客户端
-│   │   └── webhook/      # 通知发送（签名、重试、落库）
+│   │   ├── webhook/      # Webhook 通知发送（签名、重试、落库）
+│   │   ├── robot/        # 钉钉/企微/飞书机器人（消息构造、加签、域名白名单、业务码判定）
+│   │   └── mail/         # 邮件 SMTP（配置解析与掩码、自管会话 SSL/STARTTLS、PLAIN/LOGIN）
 │   ├── logs/             # 日志中心服务（采集源、检索、日志告警、登录日志、操作审计、菜单种子）
 │   │   └── datasource/   # Loki 客户端、LogQL 构建、tail.sh 脚本与输出解析
 │   ├── cmdb/             # CMDB 服务（资产、标签、关系拓扑、IPAM、菜单种子）
 │   └── system/           # 系统服务（用户、角色、菜单、部门、日志等）
+├── sql/                  # 数据库初始化 DDL（ops-go.sql，一键建库建表）
 ├── utils/                # 工具函数（RSA 加密、SFTP 客户端、ip2region 归属地查询等）
 ├── .env                  # 环境变量配置
 ├── go.mod                # Go 模块定义
@@ -855,7 +875,7 @@ exit     # 退出
 | 监控采集 | `/api/monitor/target/*` | 采集目标管理 |
 | 告警规则 | `/api/monitor/rule/*` | 规则管理、静默、试算 |
 | 告警事件 | `/api/monitor/event/*` | 事件查询与确认 |
-| 通知渠道 | `/api/monitor/channel/*` | Webhook 渠道管理 |
+| 通知渠道 | `/api/monitor/channel/*` | Webhook/邮件/钉钉/企微/飞书渠道管理 |
 | 指标查询 | `/api/monitor/metrics/*` | 总览/即时/区间查询 |
 | 资产台账 | `/api/cmdb/asset/*` | 资产管理与生命周期流转 |
 | 资产标签 | `/api/cmdb/tag/*` | 标签管理与打标 |
