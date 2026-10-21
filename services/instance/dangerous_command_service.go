@@ -42,7 +42,7 @@ func InitDangerousCommands() {
 // ReloadDangerousCommands 重新从数据库加载规则到内存缓存
 func ReloadDangerousCommands() {
 	var commands []models.OpsDangerousCommand
-	if err := models.DB.Where("is_enabled = ? AND del_flag = ?", 1, 0).Find(&commands).Error; err != nil {
+	if err := models.DB.Where("is_enabled = ? AND del_flag = ?", int8(1), "0").Find(&commands).Error; err != nil {
 		log.Printf("加载高危指令规则失败: %v", err)
 		return
 	}
@@ -123,7 +123,7 @@ func (s *DangerousCommandService) List(pageNum, pageSize int, name string) (mode
 		if name != "" {
 			db = db.Where("name like ?", "%"+name+"%")
 		}
-		return db.Where("del_flag = ?", 0).Order("is_builtin desc, id desc")
+		return db.Where("del_flag = ?", "0").Order("is_builtin desc, id desc")
 	})
 }
 
@@ -185,7 +185,7 @@ func (s *DangerousCommandService) Delete(id int) error {
 	if existing.IsBuiltin == 1 {
 		return errors.New("内置规则不允许删除")
 	}
-	if err := models.DB.Model(&existing).Update("del_flag", 1).Error; err != nil {
+	if err := models.DB.Model(&existing).Update("del_flag", "1").Error; err != nil {
 		return errors.New("删除失败")
 	}
 	ReloadDangerousCommands()

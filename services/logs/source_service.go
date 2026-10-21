@@ -20,7 +20,7 @@ type LogSourceService struct{}
 // List 采集源分页
 func (s *LogSourceService) List(pageNum, pageSize int, filter api.LogSourcePageRequest) (models.PageResult[models.OpsLogSource], error) {
 	result, err := models.Paginate[models.OpsLogSource](models.DB, pageNum, pageSize, func(db *gorm.DB) *gorm.DB {
-		db = db.Where("del_flag = ?", 0)
+		db = db.Where("del_flag = ?", "0")
 		if filter.Name != "" {
 			db = db.Where("name like ?", "%"+escapeLike(filter.Name)+"%")
 		}
@@ -51,7 +51,7 @@ func (s *LogSourceService) List(pageNum, pageSize int, filter api.LogSourcePageR
 // Get 采集源详情
 func (s *LogSourceService) Get(id int) (*models.OpsLogSource, error) {
 	var source models.OpsLogSource
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&source).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&source).Error; err != nil {
 		return nil, errors.New("采集源不存在")
 	}
 	return &source, nil
@@ -75,7 +75,7 @@ func (s *LogSourceService) Add(source *models.OpsLogSource) error {
 // Edit 更新采集源。主机/路径/凭证变化会重置读取位点，避免沿用旧文件的偏移量。
 func (s *LogSourceService) Edit(request api.LogSourceRequest) error {
 	var existing models.OpsLogSource
-	if err := models.DB.Where("id = ? AND del_flag = ?", request.Id, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", request.Id, "0").First(&existing).Error; err != nil {
 		return errors.New("采集源不存在")
 	}
 
@@ -123,8 +123,8 @@ func (s *LogSourceService) Edit(request api.LogSourceRequest) error {
 
 // Delete 软删除采集源
 func (s *LogSourceService) Delete(id int) error {
-	if err := models.DB.Model(&models.OpsLogSource{}).Where("id = ? AND del_flag = ?", id, 0).
-		Update("del_flag", 1).Error; err != nil {
+	if err := models.DB.Model(&models.OpsLogSource{}).Where("id = ? AND del_flag = ?", id, "0").
+		Update("del_flag", "1").Error; err != nil {
 		log.Println("删除日志采集源失败：", err)
 		return errors.New("删除采集源失败")
 	}
@@ -136,7 +136,7 @@ func (s *LogSourceService) Toggle(id int, enabled string) error {
 	if enabled != "0" && enabled != "1" {
 		return errors.New("启停状态非法")
 	}
-	return models.DB.Model(&models.OpsLogSource{}).Where("id = ? AND del_flag = ?", id, 0).
+	return models.DB.Model(&models.OpsLogSource{}).Where("id = ? AND del_flag = ?", id, "0").
 		Updates(map[string]any{"enabled": enabled, "updated_at": time.Now()}).Error
 }
 
@@ -150,7 +150,7 @@ func (s *LogSourceService) ResetOffset(id int) error {
 func (s *LogSourceService) Jobs() ([]string, error) {
 	var jobs []string
 	if err := models.DB.Model(&models.OpsLogSource{}).
-		Where("del_flag = ?", 0).Distinct().Pluck("job", &jobs).Error; err != nil {
+		Where("del_flag = ?", "0").Distinct().Pluck("job", &jobs).Error; err != nil {
 		return nil, err
 	}
 	return jobs, nil
@@ -172,7 +172,7 @@ func (s *LogSourceService) InstanceKeys(instanceId int) ([]SourceKeyOption, erro
 	err := models.DB.Model(&models.OpsKey{}).
 		Select("ops_key.id, ops_key.name, ops_key.user").
 		Joins("JOIN ops_instance_keys ON ops_instance_keys.key_id = ops_key.id").
-		Where("ops_instance_keys.instance_id = ? AND ops_key.del_flag = ? AND ops_key.status = ?", instanceId, 0, "1").
+		Where("ops_instance_keys.instance_id = ? AND ops_key.del_flag = ? AND ops_key.status = ?", instanceId, "0", "1").
 		Order("ops_key.id").
 		Find(&keys).Error
 	if err != nil {
@@ -199,7 +199,7 @@ type Option struct {
 // Options 启用中的采集源精简列表
 func (s *LogSourceService) Options() ([]Option, error) {
 	var sources []models.OpsLogSource
-	if err := models.DB.Where("del_flag = ? AND enabled = ?", 0, "1").Order("id asc").Find(&sources).Error; err != nil {
+	if err := models.DB.Where("del_flag = ? AND enabled = ?", "0", "1").Order("id asc").Find(&sources).Error; err != nil {
 		return nil, errors.New("查询采集源失败")
 	}
 	options := make([]Option, 0, len(sources))
@@ -216,7 +216,7 @@ func (s *LogSourceService) Options() ([]Option, error) {
 func (s *LogSourceService) checkUnique(id, instanceId int, path string) error {
 	var count int64
 	err := models.DB.Model(&models.OpsLogSource{}).
-		Where("del_flag = ? AND instance_id = ? AND path = ? AND id != ?", 0, instanceId, path, id).
+		Where("del_flag = ? AND instance_id = ? AND path = ? AND id != ?", "0", instanceId, path, id).
 		Count(&count).Error
 	if err != nil {
 		log.Println("校验日志采集源唯一性失败：", err)
@@ -249,7 +249,7 @@ func normalizeSource(source *models.OpsLogSource) error {
 	}
 
 	var host models.OpsInstance
-	if err := models.DB.Where("id = ? AND del_flag = ?", source.InstanceId, 0).First(&host).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", source.InstanceId, "0").First(&host).Error; err != nil {
 		return errors.New("采集主机不存在")
 	}
 	source.InstanceName = host.Name

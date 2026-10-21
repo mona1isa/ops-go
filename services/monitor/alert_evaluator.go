@@ -100,7 +100,7 @@ func (e *EvaluatorService) releaseRound() {
 
 func (e *EvaluatorService) loadRules() []models.OpsMonitorRule {
 	var rules []models.OpsMonitorRule
-	if err := models.DB.Where("del_flag = ? AND enabled = ?", 0, "1").Find(&rules).Error; err != nil {
+	if err := models.DB.Where("del_flag = ? AND enabled = ?", "0", "1").Find(&rules).Error; err != nil {
 		log.Println("查询启用中的告警规则异常:", err)
 		return nil
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/zhany/ops-go/models"
 	"gorm.io/gorm"
@@ -56,7 +57,9 @@ func (s *AssetService) List(pageNum, pageSize int, filter AssetFilter) (models.P
 				models.DB.Table(models.TableOpsCmdbAssetTag).Select("asset_id").Where("tag_id = ?", filter.TagId))
 		}
 		if filter.ExpireWithin > 0 {
-			db = db.Where("expired_at IS NOT NULL AND expired_at <= DATE_ADD(NOW(), INTERVAL ? DAY) AND expired_at >= NOW()", filter.ExpireWithin)
+			// 到期上界在 Go 侧算好再绑定，规避 MySQL DATE_ADD INTERVAL 与 PG 间隔语法的方言差异
+			upper := time.Now().AddDate(0, 0, filter.ExpireWithin)
+			db = db.Where("expired_at IS NOT NULL AND expired_at <= ? AND expired_at >= NOW()", upper)
 		}
 		return db.Order("id DESC")
 	}

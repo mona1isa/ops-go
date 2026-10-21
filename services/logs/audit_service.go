@@ -35,7 +35,7 @@ func PageSysLog(pageNum, pageSize int, filter SysLogFilter) (models.PageResult[m
 			db = db.Where("oper_type = ?", filter.OperType)
 		}
 		if filter.Sensitive == "1" {
-			db = db.Where("`sensitive` = ?", "1")
+			db = db.Where(models.QuotedIdent("sensitive")+" = ?", "1")
 		}
 		if filter.RequestUri != "" {
 			db = db.Where("request_uri like ?", "%"+escapeLike(filter.RequestUri)+"%")
@@ -52,7 +52,7 @@ func PageSysLog(pageNum, pageSize int, filter SysLogFilter) (models.PageResult[m
 		if filter.EndAt != "" {
 			db = db.Where("created_at <= ?", parseTimeInput(filter.EndAt))
 		}
-		return db.Where("del_flag = ?", 0).Order("id desc")
+		return db.Where("del_flag = ?", "0").Order("id desc")
 	})
 	if err != nil {
 		log.Println("查询操作审计日志失败：", err)
@@ -101,7 +101,7 @@ func AnalyzeAudit(hours int64) AuditOverview {
 	var total int64
 	models.DB.Model(&models.SysLog{}).Where("created_at >= ?", since).Count(&total)
 	overview.Total = total
-	models.DB.Model(&models.SysLog{}).Where("created_at >= ? AND `sensitive` = ?", since, "1").Count(&overview.Sensitive)
+	models.DB.Model(&models.SysLog{}).Where("created_at >= ? AND "+models.QuotedIdent("sensitive")+" = ?", since, "1").Count(&overview.Sensitive)
 	models.DB.Model(&models.SysLog{}).Where("created_at >= ? AND (status_code >= ? OR (biz_code <> '' AND biz_code <> ?))", since, "400", "200").Count(&overview.Fail)
 
 	models.DB.Table("sys_log").
@@ -116,7 +116,7 @@ func AnalyzeAudit(hours int64) AuditOverview {
 
 	models.DB.Table("sys_log").
 		Select("request_uri as name, COUNT(*) as count").
-		Where("created_at >= ? AND del_flag = ? AND `sensitive` = ?", since, "0", "1").
+		Where("created_at >= ? AND del_flag = ? AND "+models.QuotedIdent("sensitive")+" = ?", since, "0", "1").
 		Group("request_uri").Order("count desc").Limit(20).Scan(&overview.SensitiveOps)
 
 	models.DB.Table("sys_log").

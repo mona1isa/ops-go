@@ -133,6 +133,17 @@ func (c *CasbinHandler) ReloadPolicy() error {
 	return c.enforcer.LoadPolicy()
 }
 
+// GetRolePolicies 读取角色当前已有的 p 策略，形如 [role_2, /api/logs/alert/page, POST]
+func (c *CasbinHandler) GetRolePolicies(roleId int) ([][]string, error) {
+	c.init()
+	if initError != nil {
+		return nil, initError
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.enforcer.GetFilteredNamedPolicy("p", 0, c.MakeRoleName(roleId))
+}
+
 // AddPolicy 添加策略
 func (c *CasbinHandler) AddPolicy(roleId int, uri, method string) (bool, error) {
 	c.init()

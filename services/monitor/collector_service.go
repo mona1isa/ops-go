@@ -75,7 +75,7 @@ func (s *CollectorService) collectOnce() {
 
 	ctx := context.Background()
 	var targets []models.OpsMonitorTarget
-	if err := models.DB.Where("del_flag = ? AND enabled = ?", 0, "1").Find(&targets).Error; err != nil {
+	if err := models.DB.Where("del_flag = ? AND enabled = ?", "0", "1").Find(&targets).Error; err != nil {
 		log.Println("监控采集：查询采集目标失败:", err)
 		return
 	}
@@ -197,7 +197,7 @@ type CollectResult struct {
 // 停用目标也允许手动采集，便于排查连接与配置问题。
 func (s *CollectorService) CollectTargetNow(ctx context.Context, targetId int) (*CollectResult, error) {
 	var target models.OpsMonitorTarget
-	if err := models.DB.Where("id = ? AND del_flag = ?", targetId, 0).First(&target).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", targetId, "0").First(&target).Error; err != nil {
 		return nil, errors.New("采集目标不存在")
 	}
 
@@ -241,7 +241,7 @@ func (s *CollectorService) collectTarget(ctx context.Context, target *models.Ops
 // buildExecTask 解析主机与凭证，构造远程执行任务
 func buildExecTask(target *models.OpsMonitorTarget) (instance.ExecTask, error) {
 	var host models.OpsInstance
-	if err := models.DB.Where("id = ? AND del_flag = ? AND status = ?", target.InstanceId, 0, "1").
+	if err := models.DB.Where("id = ? AND del_flag = ? AND status = ?", target.InstanceId, "0", "1").
 		First(&host).Error; err != nil {
 		return instance.ExecTask{}, errors.New("主机不存在或已禁用")
 	}
@@ -250,7 +250,7 @@ func buildExecTask(target *models.OpsMonitorTarget) (instance.ExecTask, error) {
 	if keyId == 0 {
 		// 未显式指定凭证时，沿用主机授权关系中的第一个凭证
 		var auth models.OpsUserInstanceKeyAuth
-		if err := models.DB.Where("instance_id = ? AND del_flag = ?", target.InstanceId, 0).
+		if err := models.DB.Where("instance_id = ? AND del_flag = ?", target.InstanceId, "0").
 			First(&auth).Error; err == nil {
 			keyId = auth.KeyId
 		}
@@ -260,7 +260,7 @@ func buildExecTask(target *models.OpsMonitorTarget) (instance.ExecTask, error) {
 	}
 
 	var key models.OpsKey
-	if err := models.DB.Where("id = ? AND del_flag = ? AND status = ?", keyId, 0, "1").
+	if err := models.DB.Where("id = ? AND del_flag = ? AND status = ?", keyId, "0", "1").
 		First(&key).Error; err != nil {
 		return instance.ExecTask{}, errors.New("采集凭证不存在或已禁用")
 	}

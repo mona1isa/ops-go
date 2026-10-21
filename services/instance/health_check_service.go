@@ -44,7 +44,7 @@ func (s *HealthCheckService) Start() {
 // checkAllInstances 检查所有启用状态的主机
 func (s *HealthCheckService) checkAllInstances() {
 	var instances []models.OpsInstance
-	if err := models.DB.Where("status = ? AND del_flag = ?", "1", 0).Find(&instances).Error; err != nil {
+	if err := models.DB.Where("status = ? AND del_flag = ?", "1", "0").Find(&instances).Error; err != nil {
 		log.Println("健康检查：查询主机列表失败:", err)
 		return
 	}

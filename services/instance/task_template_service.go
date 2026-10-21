@@ -20,14 +20,14 @@ func (s *TaskTemplateService) List(pageNum, pageSize int, name string, taskType 
 		if taskType != nil {
 			db = db.Where("type = ?", *taskType)
 		}
-		return db.Where("del_flag = ?", 0).Order("id desc")
+		return db.Where("del_flag = ?", "0").Order("id desc")
 	})
 }
 
 // GetByID 根据ID查询任务模板
 func (s *TaskTemplateService) GetByID(id int) (*models.OpsTaskTemplate, error) {
 	var template models.OpsTaskTemplate
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&template).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&template).Error; err != nil {
 		return nil, errors.New("模板不存在")
 	}
 	return &template, nil
@@ -57,7 +57,7 @@ func (s *TaskTemplateService) Edit(template *models.OpsTaskTemplate) error {
 		return errors.New("模板ID不能为空")
 	}
 	var existing models.OpsTaskTemplate
-	if err := models.DB.Where("id = ? AND del_flag = ?", template.ID, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", template.ID, "0").First(&existing).Error; err != nil {
 		return errors.New("模板不存在")
 	}
 	updates := map[string]interface{}{
@@ -80,10 +80,10 @@ func (s *TaskTemplateService) Edit(template *models.OpsTaskTemplate) error {
 // Delete 删除任务模板
 func (s *TaskTemplateService) Delete(id int) error {
 	var existing models.OpsTaskTemplate
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&existing).Error; err != nil {
 		return errors.New("模板不存在")
 	}
-	if err := models.DB.Model(&existing).Update("del_flag", 1).Error; err != nil {
+	if err := models.DB.Model(&existing).Update("del_flag", "1").Error; err != nil {
 		return errors.New("删除失败")
 	}
 	return nil

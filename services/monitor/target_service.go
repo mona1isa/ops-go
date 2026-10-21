@@ -27,7 +27,7 @@ type TargetFilter struct {
 // List 分页查询采集目标
 func (s *TargetService) List(pageNum, pageSize int, filter TargetFilter) (models.PageResult[models.OpsMonitorTarget], error) {
 	result, err := models.Paginate[models.OpsMonitorTarget](models.DB, pageNum, pageSize, func(db *gorm.DB) *gorm.DB {
-		db = db.Where("del_flag = ?", 0)
+		db = db.Where("del_flag = ?", "0")
 		if filter.Name != "" {
 			db = db.Where("instance_name like ?", "%"+escapeLike(filter.Name)+"%")
 		}
@@ -72,7 +72,7 @@ func (s *TargetService) Add(target *models.OpsMonitorTarget) error {
 // Edit 编辑采集目标
 func (s *TargetService) Edit(target *models.OpsMonitorTarget) error {
 	var existing models.OpsMonitorTarget
-	if err := models.DB.Where("id = ? AND del_flag = ?", target.ID, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", target.ID, "0").First(&existing).Error; err != nil {
 		return errors.New("采集目标不存在")
 	}
 	instance, err := loadInstance(target.InstanceId)
@@ -112,10 +112,10 @@ func (s *TargetService) Edit(target *models.OpsMonitorTarget) error {
 // Delete 软删除采集目标并清理其在数据源中的序列
 func (s *TargetService) Delete(id int) error {
 	var existing models.OpsMonitorTarget
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&existing).Error; err != nil {
 		return errors.New("采集目标不存在")
 	}
-	if err := models.DB.Model(&existing).Update("del_flag", 1).Error; err != nil {
+	if err := models.DB.Model(&existing).Update("del_flag", "1").Error; err != nil {
 		log.Println("删除采集目标失败：", err)
 		return errors.New("删除采集目标失败")
 	}
@@ -128,7 +128,7 @@ func (s *TargetService) Toggle(id int, enabled string) error {
 	if enabled != "0" && enabled != "1" {
 		return errors.New("启用状态非法")
 	}
-	if err := models.DB.Model(&models.OpsMonitorTarget{}).Where("id = ? AND del_flag = ?", id, 0).
+	if err := models.DB.Model(&models.OpsMonitorTarget{}).Where("id = ? AND del_flag = ?", id, "0").
 		Update("enabled", enabled).Error; err != nil {
 		log.Println("更新采集目标状态失败：", err)
 		return errors.New("更新采集目标状态失败")
@@ -145,13 +145,13 @@ func (s *TargetService) Toggle(id int, enabled string) error {
 // Sync 从主机列表补齐采集目标，返回新增数量
 func (s *TargetService) Sync(createBy string) (int, error) {
 	var instances []models.OpsInstance
-	if err := models.DB.Where("del_flag = ? AND status = ?", 0, "1").Find(&instances).Error; err != nil {
+	if err := models.DB.Where("del_flag = ? AND status = ?", "0", "1").Find(&instances).Error; err != nil {
 		log.Println("查询主机列表失败：", err)
 		return 0, errors.New("查询主机列表失败")
 	}
 
 	var existing []models.OpsMonitorTarget
-	if err := models.DB.Where("del_flag = ?", 0).Find(&existing).Error; err != nil {
+	if err := models.DB.Where("del_flag = ?", "0").Find(&existing).Error; err != nil {
 		log.Println("查询采集目标失败：", err)
 		return 0, errors.New("同步采集目标失败")
 	}
@@ -201,7 +201,7 @@ func (s *TargetService) InstanceKeys(instanceId int) ([]TargetKeyOption, error) 
 	err := models.DB.Model(&models.OpsKey{}).
 		Select("ops_key.id, ops_key.name, ops_key.user").
 		Joins("JOIN ops_instance_keys ON ops_instance_keys.key_id = ops_key.id").
-		Where("ops_instance_keys.instance_id = ? AND ops_key.del_flag = ? AND ops_key.status = ?", instanceId, 0, "1").
+		Where("ops_instance_keys.instance_id = ? AND ops_key.del_flag = ? AND ops_key.status = ?", instanceId, "0", "1").
 		Order("ops_key.id").
 		Find(&keys).Error
 	if err != nil {
@@ -218,7 +218,7 @@ func (s *TargetService) InstanceKeys(instanceId int) ([]TargetKeyOption, error) 
 func (s *TargetService) checkUnique(id, instanceId int) error {
 	var count int64
 	err := models.DB.Model(&models.OpsMonitorTarget{}).
-		Where("del_flag = ? AND instance_id = ? AND id != ?", 0, instanceId, id).Count(&count).Error
+		Where("del_flag = ? AND instance_id = ? AND id != ?", "0", instanceId, id).Count(&count).Error
 	if err != nil {
 		log.Println("校验采集目标失败：", err)
 		return errors.New("校验采集目标失败")
@@ -231,7 +231,7 @@ func (s *TargetService) checkUnique(id, instanceId int) error {
 
 func loadInstance(instanceId int) (*models.OpsInstance, error) {
 	var instance models.OpsInstance
-	if err := models.DB.Where("id = ? AND del_flag = ?", instanceId, 0).First(&instance).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", instanceId, "0").First(&instance).Error; err != nil {
 		return nil, errors.New("主机不存在")
 	}
 	if strings.TrimSpace(instance.Ip) == "" {

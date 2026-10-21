@@ -8,6 +8,7 @@ import (
 	instanceService "github.com/zhany/ops-go/services/instance"
 	logService "github.com/zhany/ops-go/services/logs"
 	monitorService "github.com/zhany/ops-go/services/monitor"
+	systemService "github.com/zhany/ops-go/services/system"
 	"log"
 	"os"
 )
@@ -34,6 +35,8 @@ func main() {
 	go monitorService.NewEvaluatorService().Start()
 	// 初始化日志中心菜单
 	logService.InitLogMenu()
+	// 按 sys_role_menu 补齐各角色的 Casbin 策略，使种子新增的菜单/按钮对非超管角色立即可用
+	systemService.SyncRolePolicies()
 	// 启动日志采集服务（SSH 增量拉取 → Loki）
 	go logService.NewLogCollectorService().Start()
 	// 启动日志告警评估服务

@@ -7,6 +7,7 @@ import (
 	"github.com/zhany/ops-go/services"
 	"gorm.io/gorm"
 	"log"
+	"strings"
 )
 
 type RoleService struct{}
@@ -295,15 +296,7 @@ func saveUserRole(addedUserIds []int, removedUserIds []int, roleId int) error {
 // 先添加新策略，成功后删除旧策略，确保原子性
 func saveCasbinPolicy(roleId int, menus []models.SysMenu) error {
 	// 构建新的策略列表
-	roleName := models.Casbin.MakeRoleName(roleId)
-	newPolicies := make([][]string, 0)
-	for _, menu := range menus {
-		url := menu.RequestUrl
-		method := menu.RequestMethod
-		if url != "" && method != "" {
-			newPolicies = append(newPolicies, []string{roleName, url, method})
-		}
-	}
+	newPolicies := policiesOfMenus(models.Casbin.MakeRoleName(roleId), menus)
 
 	// 获取旧策略（用于失败时回滚）
 	oldPolicies, err := getRolePolicies(roleId)
@@ -340,7 +333,15 @@ func saveCasbinPolicy(roleId int, menus []models.SysMenu) error {
 
 // getRolePolicies 获取角色的现有策略（用于回滚）
 func getRolePolicies(roleId int) ([][]string, error) {
-	// 这里我们通过数据库查询获取，避免直接访问 enforcer
+	menus, err := roleAssignedMenus(roleId)
+	if err != nil {
+		return nil, err
+	}
+	return policiesOfMenus(models.Casbin.MakeRoleName(roleId), menus), nil
+}
+
+// roleAssignedMenus 角色已勾选的菜单
+func roleAssignedMenus(roleId int) ([]models.SysMenu, error) {
 	var menus []models.SysMenu
 	var roleMenus []models.SysRoleMenu
 	if err := models.DB.Where("role_id = ?", roleId).Find(&roleMenus).Error; err != nil {
@@ -353,19 +354,82 @@ func getRolePolicies(roleId int) ([][]string, error) {
 	}
 
 	if len(menuIds) == 0 {
-		return [][]string{}, nil
+		return menus, nil
 	}
 
 	if err := models.DB.Where("id in ?", menuIds).Find(&menus).Error; err != nil {
 		return nil, err
 	}
+	return menus, nil
+}
 
-	roleName := models.Casbin.MakeRoleName(roleId)
-	policies := make([][]string, 0)
+// policiesOfMenus 菜单授权对应的 Casbin 策略行，只有接口地址与方法齐全的菜单才产生策略。
+// 同一接口可能被多个菜单引用（页面与其按钮同址），这里去重：重复行会让 gorm-adapter 的
+// 批量写入触发 MySQL 1869（Auto-increment 冲突），整批策略写入失败。
+func policiesOfMenus(roleName string, menus []models.SysMenu) [][]string {
+	policies := make([][]string, 0, len(menus))
+	seen := make(map[string]bool, len(menus))
 	for _, menu := range menus {
-		if menu.RequestUrl != "" && menu.RequestMethod != "" {
-			policies = append(policies, []string{roleName, menu.RequestUrl, menu.RequestMethod})
+		if menu.RequestUrl == "" || menu.RequestMethod == "" {
+			continue
+		}
+		key := menu.RequestUrl + "\t" + menu.RequestMethod
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		policies = append(policies, []string{roleName, menu.RequestUrl, menu.RequestMethod})
+	}
+	return policies
+}
+
+// SyncRolePolicies 按 sys_role_menu 重建各角色的 Casbin 策略，仅重写有差异的角色。
+// 背景：策略只在管理员保存角色权限时写入，新功能菜单由启动种子补写后，
+// 非超管角色即便已被授予菜单也没有对应的接口策略（请求 403），前端按钮也缺少权限标识。
+func SyncRolePolicies() {
+	var roleIds []int
+	if err := models.DB.Table(models.TableSysRoleMenu).
+		Select("DISTINCT role_id").Scan(&roleIds).Error; err != nil {
+		log.Println("同步角色 Casbin 策略失败：查询已授权角色异常：", err)
+		return
+	}
+
+	for _, roleId := range roleIds {
+		menus, err := roleAssignedMenus(roleId)
+		if err != nil {
+			log.Printf("同步角色 %d 的 Casbin 策略失败：查询菜单异常：%v\n", roleId, err)
+			continue
+		}
+		expected := policiesOfMenus(models.Casbin.MakeRoleName(roleId), menus)
+		current, err := models.Casbin.GetRolePolicies(roleId)
+		if err != nil {
+			log.Printf("同步角色 %d 的 Casbin 策略失败：读取现有策略异常：%v\n", roleId, err)
+			continue
+		}
+		if samePolicies(expected, current) {
+			continue
+		}
+		if err := saveCasbinPolicy(roleId, menus); err != nil {
+			log.Printf("同步角色 %d 的 Casbin 策略失败：%v\n", roleId, err)
+			continue
+		}
+		log.Printf("角色 %d 的 Casbin 策略已同步：%d 条（原 %d 条）\n", roleId, len(expected), len(current))
+	}
+}
+
+func samePolicies(a, b [][]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(a))
+	for _, rule := range a {
+		seen[strings.Join(rule, "\t")] = struct{}{}
+	}
+	for _, rule := range b {
+		if _, ok := seen[strings.Join(rule, "\t")]; !ok {
+			return false
 		}
 	}
-	return policies, nil
+	return true
 }
+

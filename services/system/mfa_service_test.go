@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zhany/ops-go/mfa"
 	"github.com/zhany/ops-go/utils/totp"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,7 +20,7 @@ func TestRecoveryCodeHashRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hashes, err := hashRecoveryCodes(codes)
+	hashes, err := mfa.HashRecoveryCodes(codes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +28,7 @@ func TestRecoveryCodeHashRoundTrip(t *testing.T) {
 		t.Fatalf("期望 3 条哈希得到 %d", len(hashes))
 	}
 	encoded, _ := json.Marshal(hashes)
-	parsed, err := parseRecoveryHashes(string(encoded))
+	parsed, err := mfa.ParseRecoveryHashes(string(encoded))
 	if err != nil || len(parsed) != 3 {
 		t.Fatalf("哈希列表序列化往返失败: %v", err)
 	}
@@ -37,7 +38,7 @@ func TestRecoveryCodeHashRoundTrip(t *testing.T) {
 		varied := strings.ToLower(c)
 		matched := false
 		for _, h := range hashes {
-			if bcryptEqual(t, h, normalizeRecoveryCode(varied)) {
+			if bcryptEqual(t, h, mfa.NormalizeRecoveryCode(varied)) {
 				matched = true
 			}
 		}
@@ -47,24 +48,24 @@ func TestRecoveryCodeHashRoundTrip(t *testing.T) {
 	}
 	// 错误输入不应命中任何哈希
 	for _, h := range hashes {
-		if bcryptEqual(t, h, normalizeRecoveryCode("XXXXXXXX-XXXXXXXX")) {
+		if bcryptEqual(t, h, mfa.NormalizeRecoveryCode("XXXXXXXX-XXXXXXXX")) {
 			t.Fatal("错误恢复码不应命中")
 		}
 	}
 }
 
 func TestParseRecoveryHashesEmpty(t *testing.T) {
-	hashes, err := parseRecoveryHashes("")
+	hashes, err := mfa.ParseRecoveryHashes("")
 	if err != nil || len(hashes) != 0 {
 		t.Fatalf("空存储应返回空列表: %v %v", hashes, err)
 	}
-	if _, err := parseRecoveryHashes("not-json"); err == nil {
+	if _, err := mfa.ParseRecoveryHashes("not-json"); err == nil {
 		t.Fatal("非法 JSON 应报错")
 	}
 }
 
 func TestNormalizeRecoveryCode(t *testing.T) {
-	if got := normalizeRecoveryCode(" abcd-efgh-ijkl "); got != "ABCDEFGHIJKL" {
+	if got := mfa.NormalizeRecoveryCode(" abcd-efgh-ijkl "); got != "ABCDEFGHIJKL" {
 		t.Fatalf("归一化结果错误: %s", got)
 	}
 }

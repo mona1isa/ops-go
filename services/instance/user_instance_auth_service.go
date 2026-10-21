@@ -233,13 +233,13 @@ func (auth *UserInstanceAuth) GetUserInstanceAuth() (map[string]any, error) {
 	}
 
 	var instances []models.OpsInstance
-	if err := models.DB.Table("ops_instance").Select("ops_instance.*").Joins("JOIN ops_user_instance_auth ON ops_instance.id = ops_user_instance_auth.instance_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 1 AND ops_user_instance_auth.del_flag = 0", userId).Find(&instances).Error; err != nil {
+	if err := models.DB.Table("ops_instance").Select("ops_instance.*").Joins("JOIN ops_user_instance_auth ON ops_instance.id = ops_user_instance_auth.instance_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 1 AND ops_user_instance_auth.del_flag = '0'", userId).Find(&instances).Error; err != nil {
 		log.Println("获取用户授权主机信息异常: ", err)
 		return result, errors.New("获取用户授权主机信息异常")
 	}
 
 	var groups []models.OpsGroup
-	if err := models.DB.Table("ops_group").Select("ops_group.*").Joins("JOIN ops_user_instance_auth ON ops_group.id = ops_user_instance_auth.group_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = 0", userId).Find(&groups).Error; err != nil {
+	if err := models.DB.Table("ops_group").Select("ops_group.*").Joins("JOIN ops_user_instance_auth ON ops_group.id = ops_user_instance_auth.group_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = '0'", userId).Find(&groups).Error; err != nil {
 		log.Println("获取用户授权分组信息异常: ", err)
 		return result, errors.New("获取用户授权分组信息异常")
 	}
@@ -258,7 +258,7 @@ func (auth *UserInstanceAuth) GetUserInstances() (instances []models.OpsInstance
 	}
 
 	var userInstanceAuths []models.OpsUserInstanceAuth
-	if err := models.DB.Where("user_id = ? AND del_flag = 0", userId).Find(&userInstanceAuths).Error; err != nil {
+	if err := models.DB.Where("user_id = ? AND del_flag = '0'", userId).Find(&userInstanceAuths).Error; err != nil {
 		log.Println("获取用户-主机/分组授权关系异常: ", err)
 		return instances, errors.New("获取用户-主机/分组授权关系异常")
 	}
@@ -332,7 +332,7 @@ func (page *PageUserInstanceAuth) GetUserInstancesPage() (map[string]any, error)
 	}
 
 	var instances []*models.OpsInstance
-	if err := models.DB.Table("ops_instance").Select("ops_instance.*").Joins("JOIN ops_user_instance_auth ON ops_instance.id = ops_user_instance_auth.instance_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 1 AND ops_user_instance_auth.del_flag = 0", userId).Find(&instances).Error; err != nil {
+	if err := models.DB.Table("ops_instance").Select("ops_instance.*").Joins("JOIN ops_user_instance_auth ON ops_instance.id = ops_user_instance_auth.instance_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 1 AND ops_user_instance_auth.del_flag = '0'", userId).Find(&instances).Error; err != nil {
 		log.Println("获取用户授权主机信息异常: ", err)
 		return result, errors.New("获取用户授权主机信息异常")
 	}
@@ -355,7 +355,7 @@ func (page *PageUserInstanceAuth) GetUserInstancesPage() (map[string]any, error)
 	for _, instance := range pageInstances {
 		// SELECT ops_key.* FROM ops_key JOIN ops_user_instance_key_auth ON ops_key.id=ops_user_instance_key_auth.`key_id` WHERE ops_user_instance_key_auth.`instance_id` = ? AND ops_user_instance_key_auth.`user_id`=?
 		var bindKeys []models.OpsKey
-		if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.instance_id = ? AND ops_user_instance_key_auth.user_id = ? AND ops_user_instance_key_auth.del_flag = 0", instance.ID, userId).Find(&bindKeys).Error; err != nil {
+		if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.instance_id = ? AND ops_user_instance_key_auth.user_id = ? AND ops_user_instance_key_auth.del_flag = '0'", instance.ID, userId).Find(&bindKeys).Error; err != nil {
 			log.Println("获取主机已授权凭证信息异常: ", err)
 		}
 		instance.BindingKeys = bindKeys
@@ -381,7 +381,7 @@ func (page *PageUserInstanceAuth) GetUserGroupsPage() (map[string]any, error) {
 	}
 
 	var groups []*models.OpsGroup
-	if err := models.DB.Table("ops_group").Select("ops_group.*").Joins("JOIN ops_user_instance_auth ON ops_group.id = ops_user_instance_auth.group_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = 0", userId).Find(&groups).Error; err != nil {
+	if err := models.DB.Table("ops_group").Select("ops_group.*").Joins("JOIN ops_user_instance_auth ON ops_group.id = ops_user_instance_auth.group_id").Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = '0'", userId).Find(&groups).Error; err != nil {
 		log.Println("获取用户授权主机分组信息异常: ", err)
 		return result, errors.New("获取用户授权主机分组信息异常")
 	}
@@ -404,7 +404,7 @@ func (page *PageUserInstanceAuth) GetUserGroupsPage() (map[string]any, error) {
 	for _, group := range resultGroups {
 		var keys []models.OpsKey
 		// SELECT ops_key.* FROM ops_key JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.`key_id` WHERE ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2
-		if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2 AND ops_user_instance_key_auth.del_flag = 0", userId, group.ID).Find(&keys).Error; err != nil {
+		if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2 AND ops_user_instance_key_auth.del_flag = '0'", userId, group.ID).Find(&keys).Error; err != nil {
 			log.Println("获取用户已授权主机分组凭证异常: ", err)
 			return result, errors.New("获取用户已授权主机分组凭证异常")
 		}
@@ -436,7 +436,7 @@ func (page *PageUserInstanceAuth) GetInstances() (map[string]any, error) {
 	}
 	// 获取用户已授权的主机
 	var hasAuthedInstanceIds []int
-	if err := models.DB.Model(&models.OpsUserInstanceAuth{}).Where("user_id = ? and auth_type = 1 and del_flag = 0", userId).Select("instance_id").Find(&hasAuthedInstanceIds).Error; err != nil {
+	if err := models.DB.Model(&models.OpsUserInstanceAuth{}).Where("user_id = ? and auth_type = 1 and del_flag = '0'", userId).Select("instance_id").Find(&hasAuthedInstanceIds).Error; err != nil {
 		log.Println("获取用户已授权主机异常: ", err)
 		return result, errors.New("获取用户已授权主机异常")
 	}
@@ -477,7 +477,7 @@ func (page *PageUserInstanceAuth) GetGroups() (map[string]any, error) {
 	}
 	// 获取用户已授权的主机分组
 	var hasAuthedGroupIds []int
-	if err := models.DB.Model(&models.OpsUserInstanceAuth{}).Where("user_id = ? and auth_type = 2 and del_flag = 0", userId).Select("group_id").Find(&hasAuthedGroupIds).Error; err != nil {
+	if err := models.DB.Model(&models.OpsUserInstanceAuth{}).Where("user_id = ? and auth_type = 2 and del_flag = '0'", userId).Select("group_id").Find(&hasAuthedGroupIds).Error; err != nil {
 		log.Println("获取用户已授权主机分组异常: ", err)
 		return result, errors.New("获取用户已授权主机分组异常")
 	}
@@ -526,7 +526,7 @@ func (info *UserInstanceKey) GetUserInstanceKeys() (map[string]any, error) {
 
 	// 查询已授权的凭证
 	var keyIds []int
-	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and instance_id = ? and auth_type = 1 and del_flag = 0", userId, instanceId).Select("key_id").Find(&keyIds).Error; err != nil {
+	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and instance_id = ? and auth_type = 1 and del_flag = '0'", userId, instanceId).Select("key_id").Find(&keyIds).Error; err != nil {
 		log.Println("获取用户已授权凭证异常: ", err)
 		return result, errors.New("获取用户已授权凭证异常")
 	}
@@ -637,7 +637,7 @@ func (info *UserInstanceKeyAuth) GetUserInstanceKeyAuth() ([]models.OpsKey, erro
 	}
 
 	var keys []models.OpsKey
-	if err := models.DB.Table("ops_user_instance_key_auth").Select("ops_key.*").Joins("left join ops_key on ops_user_instance_key_auth.key_id = ops_key.id").Where("ops_user_instance_key_auth.user_id = ? and ops_user_instance_key_auth.instance_id = ? and ops_user_instance_key_auth.auth_type = 1 and ops_user_instance_key_auth.del_flag = 0", userId, instanceId).Find(&keys).Error; err != nil {
+	if err := models.DB.Table("ops_user_instance_key_auth").Select("ops_key.*").Joins("left join ops_key on ops_user_instance_key_auth.key_id = ops_key.id").Where("ops_user_instance_key_auth.user_id = ? and ops_user_instance_key_auth.instance_id = ? and ops_user_instance_key_auth.auth_type = 1 and ops_user_instance_key_auth.del_flag = '0'", userId, instanceId).Find(&keys).Error; err != nil {
 		log.Println("获取用户已授权凭证异常: ", err)
 		return nil, errors.New("获取用户已授权凭证异常")
 	}
@@ -652,7 +652,7 @@ func GetUserAvailableKeys(userId int, instanceId int, isAdmin bool) ([]models.Op
 		var keys []models.OpsKey
 		if err := models.DB.Table("ops_key").Select("ops_key.*").
 			Joins("JOIN ops_instance_keys ON ops_key.id = ops_instance_keys.key_id").
-			Where("ops_instance_keys.instance_id = ? AND ops_key.del_flag = 0", instanceId).
+			Where("ops_instance_keys.instance_id = ? AND ops_key.del_flag = '0'", instanceId).
 			Find(&keys).Error; err != nil {
 			log.Println("获取主机绑定凭证异常: ", err)
 			return nil, errors.New("获取主机凭证失败")
@@ -664,7 +664,7 @@ func GetUserAvailableKeys(userId int, instanceId int, isAdmin bool) ([]models.Op
 	var keys []models.OpsKey
 	if err := models.DB.Table("ops_key").Select("ops_key.*").
 		Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").
-		Where("ops_user_instance_key_auth.user_id = ? AND ops_user_instance_key_auth.instance_id = ? AND ops_user_instance_key_auth.auth_type = 1 AND ops_user_instance_key_auth.del_flag = 0", userId, instanceId).
+		Where("ops_user_instance_key_auth.user_id = ? AND ops_user_instance_key_auth.instance_id = ? AND ops_user_instance_key_auth.auth_type = 1 AND ops_user_instance_key_auth.del_flag = '0'", userId, instanceId).
 		Find(&keys).Error; err != nil {
 		log.Println("获取用户已授权凭证异常: ", err)
 		return nil, errors.New("获取用户已授权凭证异常")
@@ -676,7 +676,7 @@ func GetUserAvailableKeys(userId int, instanceId int, isAdmin bool) ([]models.Op
 		Joins("JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.key_id").
 		Joins("JOIN ops_instance_group ON ops_instance_group.group_id = ops_user_instance_key_auth.group_id").
 		Joins("JOIN ops_user_instance_auth ON ops_user_instance_auth.group_id = ops_user_instance_key_auth.group_id AND ops_user_instance_auth.user_id = ops_user_instance_key_auth.user_id").
-		Where("ops_user_instance_key_auth.user_id = ? AND ops_instance_group.instance_id = ? AND ops_user_instance_key_auth.auth_type = 2 AND ops_user_instance_key_auth.del_flag = 0 AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = 0", userId, instanceId).
+		Where("ops_user_instance_key_auth.user_id = ? AND ops_instance_group.instance_id = ? AND ops_user_instance_key_auth.auth_type = 2 AND ops_user_instance_key_auth.del_flag = '0' AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = '0'", userId, instanceId).
 		Find(&groupKeys).Error; err != nil {
 		log.Println("获取用户分组已授权凭证异常: ", err)
 	}
@@ -727,7 +727,7 @@ func (info *InstanceGroupUserKeyAuth) GroupAvailableKeyService() ([]models.OpsKe
 		return nil, errors.New("主机分组id不能为空")
 	}
 	var bindKeyIds []int
-	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and group_id = ? and auth_type = 2 and del_flag = 0", userId, groupId).Select("key_id").Find(&bindKeyIds).Error; err != nil {
+	if err := models.DB.Model(&models.OpsUserInstanceKeyAuth{}).Where("user_id = ? and group_id = ? and auth_type = 2 and del_flag = '0'", userId, groupId).Select("key_id").Find(&bindKeyIds).Error; err != nil {
 		return nil, errors.New("获取主机分组已授权凭证异常")
 	}
 
@@ -830,7 +830,7 @@ func (info *InstanceGroupUserKeyAuth) GroupAuthedKeyService() ([]models.OpsKey, 
 	}
 	var keys []models.OpsKey
 	// SELECT ops_key.* FROM ops_key JOIN ops_user_instance_key_auth ON ops_key.id = ops_user_instance_key_auth.`key_id` WHERE ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2
-	if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("left join ops_user_instance_key_auth on ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2 AND ops_user_instance_key_auth.del_flag = 0", userId, groupId).Find(&keys).Error; err != nil {
+	if err := models.DB.Table("ops_key").Select("ops_key.*").Joins("left join ops_user_instance_key_auth on ops_key.id = ops_user_instance_key_auth.key_id").Where("ops_user_instance_key_auth.user_id=? AND group_id=? AND auth_type=2 AND ops_user_instance_key_auth.del_flag = '0'", userId, groupId).Find(&keys).Error; err != nil {
 		return nil, errors.New("获取主机分组已授权凭证异常")
 	}
 	return keys, nil

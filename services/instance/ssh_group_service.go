@@ -54,7 +54,7 @@ func (my *MyGroupTree) GetMyGroupTree() ([]*SshGroup, error) {
 
 	// 查询全部可用凭证
 	var keys []models.OpsKey
-	if err := models.DB.Where("del_flag = ?", 0).Find(&keys).Error; err != nil {
+	if err := models.DB.Where("del_flag = ?", "0").Find(&keys).Error; err != nil {
 		log.Println("查询登录凭证信息失败：", err)
 		return nil, errors.New("查询登录凭证信息失败")
 	}
@@ -66,14 +66,14 @@ func (my *MyGroupTree) GetMyGroupTree() ([]*SshGroup, error) {
 	// 查询用户可见的主机分组
 	var groups []models.OpsGroup
 	if isAdmin {
-		if err := models.DB.Where("del_flag = ?", 0).Order("id asc").Find(&groups).Error; err != nil {
+		if err := models.DB.Where("del_flag = ?", "0").Order("id asc").Find(&groups).Error; err != nil {
 			log.Println("查询主机分组信息失败：", err)
 			return nil, errors.New("查询主机分组信息失败")
 		}
 	} else {
 		if err := models.DB.Table("ops_group").Select("ops_group.*").
 			Joins("JOIN ops_user_instance_auth ON ops_group.id = ops_user_instance_auth.group_id").
-			Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = 0", userId).
+			Where("ops_user_instance_auth.user_id = ? AND ops_user_instance_auth.auth_type = 2 AND ops_user_instance_auth.del_flag = '0'", userId).
 			Order("ops_group.id asc").Find(&groups).Error; err != nil {
 			log.Println("查询用户有权限的主机分组失败：", err)
 			return nil, errors.New("查询用户有权限的主机分组失败")
@@ -85,10 +85,10 @@ func (my *MyGroupTree) GetMyGroupTree() ([]*SshGroup, error) {
 	}
 
 	// 查询用户可见的主机（普通用户只包含直接授权的主机与已授权分组下的主机）
-	instanceDb := models.DB.Where("status = ? AND del_flag = ?", "1", 0)
+	instanceDb := models.DB.Where("status = ? AND del_flag = ?", "1", "0")
 	if !isAdmin {
 		var auths []models.OpsUserInstanceAuth
-		if err := models.DB.Where("user_id = ? AND del_flag = 0", userId).Find(&auths).Error; err != nil {
+		if err := models.DB.Where("user_id = ? AND del_flag = '0'", userId).Find(&auths).Error; err != nil {
 			log.Println("查询用户主机授权信息失败：", err)
 			return nil, errors.New("查询用户主机授权信息失败")
 		}
@@ -162,7 +162,7 @@ func (my *MyGroupTree) GetMyGroupTree() ([]*SshGroup, error) {
 		}
 	} else {
 		var hostAuths []models.OpsUserInstanceKeyAuth
-		if err := models.DB.Where("user_id = ? AND instance_id IN (?) AND auth_type = 1 AND del_flag = 0", userId, instanceIds).Find(&hostAuths).Error; err != nil {
+		if err := models.DB.Where("user_id = ? AND instance_id IN (?) AND auth_type = 1 AND del_flag = '0'", userId, instanceIds).Find(&hostAuths).Error; err != nil {
 			log.Println("查询用户主机凭证授权失败：", err)
 			return nil, errors.New("查询用户主机凭证授权失败")
 		}
@@ -171,7 +171,7 @@ func (my *MyGroupTree) GetMyGroupTree() ([]*SshGroup, error) {
 		}
 		if len(groupIds) > 0 {
 			var groupAuths []models.OpsUserInstanceKeyAuth
-			if err := models.DB.Where("user_id = ? AND group_id IN (?) AND auth_type = 2 AND del_flag = 0", userId, groupIds).Find(&groupAuths).Error; err != nil {
+			if err := models.DB.Where("user_id = ? AND group_id IN (?) AND auth_type = 2 AND del_flag = '0'", userId, groupIds).Find(&groupAuths).Error; err != nil {
 				log.Println("查询用户分组凭证授权失败：", err)
 				return nil, errors.New("查询用户分组凭证授权失败")
 			}

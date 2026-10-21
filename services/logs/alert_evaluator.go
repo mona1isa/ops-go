@@ -56,7 +56,7 @@ func (e *LogAlertEvaluator) evaluateOnce() {
 	defer e.running.Store(false)
 
 	var rules []models.OpsLogAlertRule
-	if err := models.DB.Where("del_flag = ? AND enabled = ?", 0, "1").Find(&rules).Error; err != nil {
+	if err := models.DB.Where("del_flag = ? AND enabled = ?", "0", "1").Find(&rules).Error; err != nil {
 		log.Println("日志告警：查询规则失败:", err)
 		return
 	}

@@ -66,9 +66,9 @@ func (s *MetricService) Status(ctx context.Context) *DatasourceStatus {
 		PushgatewayOK:   datasource.NewPushgateway().Available(ctx),
 		MetricNames:     datasource.PanelMetricNames(),
 	}
-	models.DB.Model(&models.OpsMonitorTarget{}).Where("del_flag = ?", 0).Count(&status.TargetCount)
-	models.DB.Model(&models.OpsMonitorTarget{}).Where("del_flag = ? AND enabled = ?", 0, "1").Count(&status.EnabledTargets)
-	models.DB.Model(&models.OpsMonitorRule{}).Where("del_flag = ? AND enabled = ?", 0, "1").Count(&status.RuleCount)
+	models.DB.Model(&models.OpsMonitorTarget{}).Where("del_flag = ?", "0").Count(&status.TargetCount)
+	models.DB.Model(&models.OpsMonitorTarget{}).Where("del_flag = ? AND enabled = ?", "0", "1").Count(&status.EnabledTargets)
+	models.DB.Model(&models.OpsMonitorRule{}).Where("del_flag = ? AND enabled = ?", "0", "1").Count(&status.RuleCount)
 	models.DB.Model(&models.OpsMonitorAlertEvent{}).Where("status = ?", models.AlertStatusFiring).Count(&status.FiringCount)
 
 	switch {
@@ -274,12 +274,12 @@ func OverviewCount() (map[string]int64, error) {
 	}
 	var collectFail int64
 	if err := models.DB.Model(&models.OpsMonitorTarget{}).
-		Where("del_flag = ? AND enabled = ? AND last_status = ?", 0, "1", models.CollectStatusFail).
+		Where("del_flag = ? AND enabled = ? AND last_status = ?", "0", "1", models.CollectStatusFail).
 		Count(&collectFail).Error; err != nil {
 		log.Println("统计采集失败目标失败：", err)
 	}
 	var targets int64
-	models.DB.Model(&models.OpsMonitorTarget{}).Where("del_flag = ? AND enabled = ?", 0, "1").Count(&targets)
+	models.DB.Model(&models.OpsMonitorTarget{}).Where("del_flag = ? AND enabled = ?", "0", "1").Count(&targets)
 
 	counts["firing"] = firing
 	counts["pending"] = pending

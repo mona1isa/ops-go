@@ -344,7 +344,7 @@ func newImportContext(rows []importRow, userId string) (*importContext, error) {
 	}
 
 	var groups []models.OpsGroup
-	if err := models.DB.Where("del_flag = ?", 0).Find(&groups).Error; err != nil {
+	if err := models.DB.Where("del_flag = ?", "0").Find(&groups).Error; err != nil {
 		log.Println("查询分组失败：", err)
 		return nil, errors.New("查询分组数据失败")
 	}
@@ -353,7 +353,7 @@ func newImportContext(rows []importRow, userId string) (*importContext, error) {
 	}
 
 	var keys []models.OpsKey
-	if err := models.DB.Where("del_flag = ?", 0).Find(&keys).Error; err != nil {
+	if err := models.DB.Where("del_flag = ?", "0").Find(&keys).Error; err != nil {
 		log.Println("查询凭证失败：", err)
 		return nil, errors.New("查询凭证数据失败")
 	}

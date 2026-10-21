@@ -204,7 +204,7 @@ func loadExecContent(execution *models.OpsTaskExecution) (taskType int8, content
 // loadTemplate 加载任务模板
 func loadTemplate(templateId int) *models.OpsTaskTemplate {
 	var tpl models.OpsTaskTemplate
-	if err := models.DB.Where("id = ? AND del_flag = ?", templateId, 0).First(&tpl).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", templateId, "0").First(&tpl).Error; err != nil {
 		return nil
 	}
 	return &tpl
@@ -259,7 +259,7 @@ func runHostsConcurrent(executionId uint64, stepExecId uint64, hosts []models.Op
 
 		// 加载凭证
 		var key models.OpsKey
-		if err := models.DB.Where("id = ? AND del_flag = ?", host.KeyId, 0).First(&key).Error; err != nil {
+		if err := models.DB.Where("id = ? AND del_flag = ?", host.KeyId, "0").First(&key).Error; err != nil {
 			now := time.Now()
 			models.DB.Model(&models.OpsExecutionHost{}).Where("id = ?", host.ID).Updates(map[string]interface{}{
 				"status":      models.HostStatusFail,

@@ -58,11 +58,11 @@ var logMenuSeeds = []logMenuSeed{
 	{Name: "操作行为分析", ParentKey: "audit", OrderNum: 1, Type: "F", Perms: "logs:audit:analyze", RequestUrl: "/api/logs/audit/analyze", RequestMethod: "POST"},
 }
 
-// InitLogMenu 初始化日志中心菜单并授权给管理员角色。
+// InitLogMenu 初始化日志中心菜单并授权。
 // 逐条按名称检查，已存在的跳过、缺失的补齐，因此新增按钮在存量部署上也会生效，重复调用安全。
 func InitLogMenu() {
 	idByKey := map[string]int{}
-	createdAny := false
+	var created []createdLogMenu
 	for _, seed := range logMenuSeeds {
 		var menu models.SysMenu
 		if err := models.DB.Where("name = ? AND del_flag = ?", seed.Name, "0").First(&menu).Error; err == nil {
@@ -108,42 +108,71 @@ func InitLogMenu() {
 				menu.ID = existing.ID
 			}
 		}
-		createdAny = true
 		key := seed.Key
 		if key == "" {
 			key = seed.Name
 		}
 		idByKey[key] = menu.ID
+		if menu.ID != 0 {
+			created = append(created, createdLogMenu{menuId: menu.ID, parentId: parentId, name: seed.Name})
+		}
 	}
 
-	if createdAny {
-		grantLogMenuToAdmin(idByKey)
+	if len(created) > 0 {
+		grantLogMenus(created)
 		log.Println("日志中心菜单初始化完成")
 	}
 }
 
-// grantLogMenuToAdmin 把新建菜单授予管理员角色，使角色权限界面可以看到并勾选
-func grantLogMenuToAdmin(menuIds map[string]int) {
+type createdLogMenu struct {
+	menuId   int
+	parentId int
+	name     string
+}
+
+// grantLogMenus 把新建菜单授予管理员角色，以及已经拥有其父菜单的角色。
+// 后者是必要的：功能迭代新增的按钮若只给超管，其它已能打开该页面的角色会看到空白页且没有任何操作入口
+// （前端按钮按 sys_menu.type='F' 的 perms 渲染）。角色本身未被授权过该模块的不会因此获得权限。
+func grantLogMenus(created []createdLogMenu) {
 	var adminRole models.SysRole
-	if err := models.DB.Where("id = ?", 1).First(&adminRole).Error; err != nil {
-		log.Println("未找到管理员角色，跳过日志菜单授权")
-		return
+	hasAdmin := models.DB.Where("id = ?", 1).First(&adminRole).Error == nil
+	if !hasAdmin {
+		log.Println("未找到管理员角色，跳过日志菜单的管理员授权")
 	}
-	for key, menuId := range menuIds {
-		if menuId == 0 {
-			continue
+
+	for _, item := range created {
+		roleIds := make([]int, 0)
+		if hasAdmin {
+			roleIds = append(roleIds, adminRole.ID)
 		}
-		var count int64
-		if err := models.DB.Model(&models.SysRoleMenu{}).
-			Where("role_id = ? AND menu_id = ?", adminRole.ID, menuId).Count(&count).Error; err != nil {
-			log.Printf("检查日志菜单授权失败 [%s]: %v", key, err)
-			continue
+		if item.parentId > 0 {
+			var parentRoleIds []int
+			if err := models.DB.Model(&models.SysRoleMenu{}).Distinct().
+				Where("menu_id = ?", item.parentId).Pluck("role_id", &parentRoleIds); err != nil {
+				log.Printf("查询日志菜单父级授权角色失败 [%s]: %v", item.name, err)
+			} else {
+				roleIds = append(roleIds, parentRoleIds...)
+			}
 		}
-		if count > 0 {
-			continue
-		}
-		if err := models.DB.Create(&models.SysRoleMenu{RoleId: adminRole.ID, MenuId: menuId}).Error; err != nil {
-			log.Printf("日志菜单授权失败 [%s]: %v", key, err)
+
+		seen := map[int]bool{}
+		for _, roleId := range roleIds {
+			if seen[roleId] {
+				continue
+			}
+			seen[roleId] = true
+			var count int64
+			if err := models.DB.Model(&models.SysRoleMenu{}).
+				Where("role_id = ? AND menu_id = ?", roleId, item.menuId).Count(&count).Error; err != nil {
+				log.Printf("检查日志菜单授权失败 [%s]: %v", item.name, err)
+				continue
+			}
+			if count > 0 {
+				continue
+			}
+			if err := models.DB.Create(&models.SysRoleMenu{RoleId: roleId, MenuId: item.menuId}).Error; err != nil {
+				log.Printf("日志菜单授权失败 [%s]: %v", item.name, err)
+			}
 		}
 	}
 }

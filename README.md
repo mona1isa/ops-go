@@ -461,8 +461,14 @@ vim .env
 `.env` 配置说明：
 
 ```env
-# 数据库配置
+# 数据库配置（MySQL 与 PostgreSQL 双驱动）
+# DB_DRIVER 未设置时按 DSN 形式自动识别，默认仍走 MySQL
+DB_DRIVER=mysql
 DB_DSN=ops_go:your_password@tcp(127.0.0.1:3306)/ops_go?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai
+
+# 使用 PostgreSQL 时改为：
+# DB_DRIVER=postgres
+# DB_DSN=postgres://user:password@127.0.0.1:5432/ops_go?sslmode=disable&timezone=Asia/Shanghai
 
 # Web 服务端口
 APP_PORT=8080

@@ -26,7 +26,7 @@ type RuleFilter struct {
 // List 分页查询告警规则
 func (s *RuleService) List(pageNum, pageSize int, filter RuleFilter) (models.PageResult[models.OpsMonitorRule], error) {
 	result, err := models.Paginate[models.OpsMonitorRule](models.DB, pageNum, pageSize, func(db *gorm.DB) *gorm.DB {
-		db = db.Where("del_flag = ?", 0)
+		db = db.Where("del_flag = ?", "0")
 		if filter.Name != "" {
 			db = db.Where("name like ?", "%"+escapeLike(filter.Name)+"%")
 		}
@@ -63,7 +63,7 @@ func (s *RuleService) Add(rule *models.OpsMonitorRule) error {
 // Edit 编辑告警规则
 func (s *RuleService) Edit(rule *models.OpsMonitorRule) error {
 	var existing models.OpsMonitorRule
-	if err := models.DB.Where("id = ? AND del_flag = ?", rule.ID, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", rule.ID, "0").First(&existing).Error; err != nil {
 		return errors.New("告警规则不存在")
 	}
 	if err := validateRule(rule); err != nil {
@@ -96,11 +96,11 @@ func (s *RuleService) Edit(rule *models.OpsMonitorRule) error {
 // Delete 软删除告警规则，并闭环其未结束的事件
 func (s *RuleService) Delete(id int) error {
 	var existing models.OpsMonitorRule
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&existing).Error; err != nil {
 		return errors.New("告警规则不存在")
 	}
 	err := models.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&existing).Update("del_flag", 1).Error; err != nil {
+		if err := tx.Model(&existing).Update("del_flag", "1").Error; err != nil {
 			return err
 		}
 		now := time.Now()
@@ -120,7 +120,7 @@ func (s *RuleService) Toggle(id int, enabled string) error {
 	if enabled != "0" && enabled != "1" {
 		return errors.New("启用状态非法")
 	}
-	if err := models.DB.Model(&models.OpsMonitorRule{}).Where("id = ? AND del_flag = ?", id, 0).
+	if err := models.DB.Model(&models.OpsMonitorRule{}).Where("id = ? AND del_flag = ?", id, "0").
 		Update("enabled", enabled).Error; err != nil {
 		log.Println("更新告警规则状态失败：", err)
 		return errors.New("更新告警规则状态失败")
@@ -137,7 +137,7 @@ func (s *RuleService) Silence(id int, seconds int64) error {
 	if seconds > 0 {
 		until = time.Now().Unix() + seconds
 	}
-	if err := models.DB.Model(&models.OpsMonitorRule{}).Where("id = ? AND del_flag = ?", id, 0).
+	if err := models.DB.Model(&models.OpsMonitorRule{}).Where("id = ? AND del_flag = ?", id, "0").
 		Update("silence_until", until).Error; err != nil {
 		log.Println("设置告警静默失败：", err)
 		return errors.New("设置告警静默失败")

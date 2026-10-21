@@ -6,18 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/zhany/ops-go/controllers/system/api"
+	"github.com/zhany/ops-go/mfa"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/utils"
 	"github.com/zhany/ops-go/utils/totp"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // MFA 相关时间参数
@@ -32,10 +31,7 @@ const (
 type MfaService struct{}
 
 // IsMfaRequired 是否强制所有用户启用 MFA（环境变量 MFA_REQUIRED）
-func IsMfaRequired() bool {
-	val := os.Getenv("MFA_REQUIRED")
-	return strings.EqualFold(val, "true") || val == "1"
-}
+func IsMfaRequired() bool { return mfa.IsRequired() }
 
 func mfaBindKey(userId int) string {
 	return fmt.Sprintf("mfa_bind:%d", userId)
@@ -81,7 +77,7 @@ func (s *MfaService) ConfirmBind(userId int, code string) (recoveryCodes []strin
 	if err != nil {
 		return nil, err
 	}
-	hashes, err := hashRecoveryCodes(recoveryCodes)
+	hashes, err := mfa.HashRecoveryCodes(recoveryCodes)
 	if err != nil {
 		return nil, err
 	}
@@ -181,14 +177,9 @@ func (s *MfaService) VerifyPreToken(preToken, code, recovery string) (int, error
 	ok := false
 	usedRecovery := strings.TrimSpace(recovery) != ""
 	if usedRecovery {
-		ok = s.consumeRecoveryCode(&user, recovery)
+		ok = mfa.ConsumeRecoveryCode(&user, recovery)
 	} else if strings.TrimSpace(code) != "" {
-		plain, decErr := utils.DecryptKey(user.TotpSecret)
-		if decErr != nil {
-			log.Println("解密 TOTP 密钥失败：", decErr)
-			return 0, errors.New("验证失败，请联系管理员")
-		}
-		ok = totp.Verify(plain, code, time.Now())
+		ok = mfa.VerifyTotpCode(&user, code)
 	}
 	if !ok {
 		attempts++
@@ -205,60 +196,6 @@ func (s *MfaService) VerifyPreToken(preToken, code, recovery string) (int, error
 
 	utils.DelCache(key)
 	return userId, nil
-}
-
-// consumeRecoveryCode 恢复码逐个 bcrypt 比对，命中后删除该条（一次性）
-func (s *MfaService) consumeRecoveryCode(user *models.SysUser, input string) bool {
-	hashes, err := parseRecoveryHashes(user.RecoveryCodes)
-	if err != nil || len(hashes) == 0 {
-		return false
-	}
-	input = normalizeRecoveryCode(input)
-	for i, h := range hashes {
-		if bcrypt.CompareHashAndPassword([]byte(h), []byte(input)) == nil {
-			remaining := make([]string, 0, len(hashes)-1)
-			remaining = append(remaining, hashes[:i]...)
-			remaining = append(remaining, hashes[i+1:]...)
-			encoded, err := json.Marshal(remaining)
-			if err != nil {
-				return false
-			}
-			if err := models.DB.Model(&models.SysUser{}).Where("id = ?", user.ID).Update("recovery_codes", string(encoded)).Error; err != nil {
-				log.Println("更新恢复码失败：", err)
-			}
-			return true
-		}
-	}
-	return false
-}
-
-// hashRecoveryCodes 生成恢复码的 bcrypt 哈希列表
-func hashRecoveryCodes(codes []string) ([]string, error) {
-	out := make([]string, 0, len(codes))
-	for _, c := range codes {
-		h, err := bcrypt.GenerateFromPassword([]byte(normalizeRecoveryCode(c)), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, string(h))
-	}
-	return out, nil
-}
-
-func parseRecoveryHashes(stored string) ([]string, error) {
-	if strings.TrimSpace(stored) == "" {
-		return nil, nil
-	}
-	var hashes []string
-	if err := json.Unmarshal([]byte(stored), &hashes); err != nil {
-		return nil, err
-	}
-	return hashes, nil
-}
-
-// normalizeRecoveryCode 去除分隔符与大小写差异，容忍用户手输格式
-func normalizeRecoveryCode(code string) string {
-	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(code), "-", ""))
 }
 
 // IssueLoginToken 密码或 MFA 验证通过后的统一签发：JWT + sys_user_token 单条覆盖 + 登录信息更新

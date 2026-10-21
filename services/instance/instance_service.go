@@ -102,7 +102,7 @@ func (s *InstanceService) ChangeStatus(request api.ChangeStatusRequest) (err err
 
 // ListInstance 查询实例列表（不分页）
 func (s *InstanceService) ListInstance(request api.ListInstanceRequest) ([]models.OpsInstance, error) {
-	db := models.DB.Where("del_flag = ?", 0)
+	db := models.DB.Where("del_flag = ?", "0")
 	if request.Name != "" {
 		db = db.Where("name like ?", "%"+request.Name+"%")
 	}

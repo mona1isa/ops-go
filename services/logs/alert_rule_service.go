@@ -20,7 +20,7 @@ type LogAlertService struct{}
 // List 规则分页
 func (s *LogAlertService) List(pageNum, pageSize int, filter api.LogAlertPageRequest) (models.PageResult[models.OpsLogAlertRule], error) {
 	result, err := models.Paginate[models.OpsLogAlertRule](models.DB, pageNum, pageSize, func(db *gorm.DB) *gorm.DB {
-		db = db.Where("del_flag = ?", 0)
+		db = db.Where("del_flag = ?", "0")
 		if filter.Name != "" {
 			db = db.Where("name like ?", "%"+escapeLike(filter.Name)+"%")
 		}
@@ -45,7 +45,7 @@ func (s *LogAlertService) List(pageNum, pageSize int, filter api.LogAlertPageReq
 // Get 规则详情
 func (s *LogAlertService) Get(id int) (*models.OpsLogAlertRule, error) {
 	var rule models.OpsLogAlertRule
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&rule).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&rule).Error; err != nil {
 		return nil, errors.New("告警规则不存在")
 	}
 	return &rule, nil
@@ -66,7 +66,7 @@ func (s *LogAlertService) Add(rule *models.OpsLogAlertRule) error {
 // Edit 更新规则
 func (s *LogAlertService) Edit(request api.LogAlertRequest) error {
 	var existing models.OpsLogAlertRule
-	if err := models.DB.Where("id = ? AND del_flag = ?", request.Id, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", request.Id, "0").First(&existing).Error; err != nil {
 		return errors.New("告警规则不存在")
 	}
 
@@ -110,8 +110,8 @@ func (s *LogAlertService) Edit(request api.LogAlertRequest) error {
 // Delete 软删除规则，同时关闭未恢复的告警事件
 func (s *LogAlertService) Delete(id int) error {
 	return models.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.OpsLogAlertRule{}).Where("id = ? AND del_flag = ?", id, 0).
-			Update("del_flag", 1).Error; err != nil {
+		if err := tx.Model(&models.OpsLogAlertRule{}).Where("id = ? AND del_flag = ?", id, "0").
+			Update("del_flag", "1").Error; err != nil {
 			return err
 		}
 		now := time.Now()
@@ -126,7 +126,7 @@ func (s *LogAlertService) Toggle(id int, enabled string) error {
 	if enabled != "0" && enabled != "1" {
 		return errors.New("启停状态非法")
 	}
-	return models.DB.Model(&models.OpsLogAlertRule{}).Where("id = ? AND del_flag = ?", id, 0).
+	return models.DB.Model(&models.OpsLogAlertRule{}).Where("id = ? AND del_flag = ?", id, "0").
 		Updates(map[string]any{"enabled": enabled, "updated_at": time.Now()}).Error
 }
 
@@ -136,7 +136,7 @@ func (s *LogAlertService) Silence(id int, minute int) error {
 	if minute > 0 {
 		until = time.Now().Add(time.Duration(minute) * time.Minute).Unix()
 	}
-	return models.DB.Model(&models.OpsLogAlertRule{}).Where("id = ? AND del_flag = ?", id, 0).
+	return models.DB.Model(&models.OpsLogAlertRule{}).Where("id = ? AND del_flag = ?", id, "0").
 		Updates(map[string]any{"silence_until": until, "updated_at": time.Now()}).Error
 }
 

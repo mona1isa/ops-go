@@ -20,7 +20,7 @@ func (s *ScriptService) List(pageNum, pageSize int, name string) (models.PageRes
 
 func (s *ScriptService) GetByID(id int) (*models.OpsScript, error) {
 	var script models.OpsScript
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&script).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&script).Error; err != nil {
 		return nil, errors.New("脚本不存在")
 	}
 	return &script, nil
@@ -45,7 +45,7 @@ func (s *ScriptService) Edit(script *models.OpsScript) error {
 		return errors.New("脚本ID不能为空")
 	}
 	var existing models.OpsScript
-	if err := models.DB.Where("id = ? AND del_flag = ?", script.ID, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", script.ID, "0").First(&existing).Error; err != nil {
 		return errors.New("脚本不存在")
 	}
 	updates := map[string]interface{}{
@@ -64,10 +64,10 @@ func (s *ScriptService) Edit(script *models.OpsScript) error {
 
 func (s *ScriptService) Delete(id int) error {
 	var existing models.OpsScript
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&existing).Error; err != nil {
 		return errors.New("脚本不存在")
 	}
-	if err := models.DB.Model(&existing).Update("del_flag", 1).Error; err != nil {
+	if err := models.DB.Model(&existing).Update("del_flag", "1").Error; err != nil {
 		return errors.New("删除失败")
 	}
 	return nil

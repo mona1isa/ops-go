@@ -2,6 +2,7 @@ package models
 
 import (
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"time"
 )
 
@@ -35,10 +36,27 @@ func Paginate[T any](db *gorm.DB, pageNum, pageSize int, scopes ...func(*gorm.DB
 	result.PageNum = pageNum
 	result.PageSize = pageSize
 
-	// 应用Scope并获取总记录数
-	baseQuery := db.Model(&model).Scopes(scopes...)
-	if err := baseQuery.Count(&result.Total).Error; err != nil {
-		return result, err
+	// 逐个展开 scope 而不用 Scopes()：GORM 把 Scopes 里的子句推迟到构建 SQL 时才落到 statement
+	// 上，展开后下面的统计才能看到并摘掉 ORDER BY
+	baseQuery := db.Model(&model)
+	for _, scope := range scopes {
+		baseQuery = scope(baseQuery)
+	}
+
+	// MySQL 允许聚合查询按裸列排序（直接忽略），PostgreSQL 报 42803，因此统计前先摘掉
+	// ORDER BY，统计完再放回，分页数据仍按原顺序返回
+	stmt := baseQuery.Statement
+	orderKey := clause.OrderBy{}.Name()
+	orderClause, hasOrder := stmt.Clauses[orderKey]
+	if hasOrder {
+		delete(stmt.Clauses, orderKey)
+	}
+	countErr := baseQuery.Count(&result.Total).Error
+	if hasOrder {
+		stmt.Clauses[orderKey] = orderClause
+	}
+	if countErr != nil {
+		return result, countErr
 	}
 
 	// 计算总页数

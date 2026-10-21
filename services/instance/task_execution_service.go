@@ -98,7 +98,7 @@ func (s *TaskExecutionService) CreateExecution(name string, execType int8, sourc
 // buildExecutionHost 构建主机执行记录
 func (s *TaskExecutionService) buildExecutionHost(executionId uint64, instanceId int, keyId int) (*models.OpsExecutionHost, error) {
 	var instance models.OpsInstance
-	if err := models.DB.Where("id = ? AND del_flag = ? AND status = ?", instanceId, 0, "1").First(&instance).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ? AND status = ?", instanceId, "0", "1").First(&instance).Error; err != nil {
 		return nil, errors.New("主机不存在或不可用")
 	}
 
@@ -109,7 +109,7 @@ func (s *TaskExecutionService) buildExecutionHost(executionId uint64, instanceId
 	if keyId == 0 {
 		// 自动选择凭证
 		var userAuths []models.OpsUserInstanceKeyAuth
-		models.DB.Where("instance_id = ? AND del_flag = ?", instanceId, 0).Find(&userAuths)
+		models.DB.Where("instance_id = ? AND del_flag = ?", instanceId, "0").Find(&userAuths)
 		if len(userAuths) > 0 {
 			resolvedKeyId = userAuths[0].KeyId
 		}
@@ -117,7 +117,7 @@ func (s *TaskExecutionService) buildExecutionHost(executionId uint64, instanceId
 
 	if resolvedKeyId > 0 {
 		var key models.OpsKey
-		if err := models.DB.Where("id = ? AND del_flag = ?", resolvedKeyId, 0).First(&key).Error; err == nil {
+		if err := models.DB.Where("id = ? AND del_flag = ?", resolvedKeyId, "0").First(&key).Error; err == nil {
 			keyName = key.Name
 			keyUser = key.User
 		}

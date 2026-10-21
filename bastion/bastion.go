@@ -18,11 +18,11 @@ import (
 	"time"
 
 	gliderssh "github.com/gliderlabs/ssh"
+	opsMfa "github.com/zhany/ops-go/mfa"
 	"github.com/zhany/ops-go/models"
 	"github.com/zhany/ops-go/services/instance"
 	logService "github.com/zhany/ops-go/services/logs"
 	"github.com/zhany/ops-go/utils"
-	"golang.org/x/crypto/bcrypt"
 	sshclient "golang.org/x/crypto/ssh"
 )
 
@@ -234,14 +234,24 @@ func (sm *SessionManager) Terminate(sessionID string) error {
 }
 
 func Init() {
+	// 堡垒机监听端口，默认 2222；同机并行验证或灰度实例可用 SSH_PORT 避让
+	port := "2222"
+	if p := os.Getenv("SSH_PORT"); p != "" {
+		port = p
+	}
 	// 注册会话终止器，让 Service 层可以调用 Bastion 的终止功能
 	instance.RegisterTerminator(globalSessionManager)
+	Serve(port)
+}
 
+// Serve 启动堡垒机监听（阻塞）。独立命令行工具可只起堡垒机做验证
+func Serve(port string) {
+	addr := ":" + port
 	pem := loadOrCreateHostKeyPEM(filepath.Join("cmd", "bastion", "hostkey.pem"))
 
 	gliderssh.Handle(sessionHandler)
 
-	log.Printf("Bastion SSH server listening on :2222")
+	log.Printf("Bastion SSH server listening on %s", addr)
 
 	signer, err := sshclient.ParsePrivateKey(pem)
 	if err != nil {
@@ -249,9 +259,10 @@ func Init() {
 	}
 
 	srv := &gliderssh.Server{
-		Addr:            ":2222",
-		Handler:         sessionHandler,
-		PasswordHandler: passwordAuth,
+		Addr:                       addr,
+		Handler:                    sessionHandler,
+		PasswordHandler:            passwordAuth,
+		KeyboardInteractiveHandler: keyboardAuth,
 		ConnCallback: func(ctx gliderssh.Context, conn net.Conn) net.Conn {
 			clientIP, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 			if isIPBanned(clientIP) {
@@ -1059,63 +1070,130 @@ func (h *HostStore) FindByIP(ip string) *Host {
 }
 
 // --------- 自定义认证 ---------
-func passwordAuth(ctx gliderssh.Context, pass string) bool {
-	user := ctx.User()
-	clientIP, _, _ := net.SplitHostPort(ctx.RemoteAddr().String())
 
-	// 堡垒机登录同样写入登录日志，便于和 Web 端合并做行为分析
-	record := func(result int8, reason string, sysUser models.SysUser) {
-		logService.RecordLogin(logService.LoginLogEntry{
-			UserName: user,
-			UserId:   sysUser.ID,
-			DeptId:   sysUser.DeptId,
-			Result:   result,
-			Reason:   reason,
-			Ip:       clientIP,
-			Platform: models.LoginSourceBastion,
-		})
+// authGuard 两种认证方式共用的前置检查：IP 封禁 → 地域 → 用户存在且启用。
+// ok=false 时已记录失败日志，sysUser 仅在 ok=true 时有效
+func authGuard(ctx gliderssh.Context) (sysUser models.SysUser, clientIP string, ok bool) {
+	user := ctx.User()
+	clientIP, _, _ = net.SplitHostPort(ctx.RemoteAddr().String())
+
+	fail := func(u models.SysUser, reason string) {
+		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 原因: %s", clientIP, user, reason)
+		recordBastionLogin(user, u.ID, u.DeptId, models.LoginResultFail, reason, clientIP)
 	}
 
-	// 检查IP是否被封禁
 	if isIPBanned(clientIP) {
-		log.Printf("堡垒机拒绝访问 - IP: %s, 用户: %s, 密码: %s, 原因: 连续登录失败超过%d次,已被封禁", clientIP, user, pass, maxLoginFails)
-		record(models.LoginResultFail, "连续登录失败次数超限，IP已封禁", models.SysUser{})
-		return false
+		fail(models.SysUser{}, fmt.Sprintf("连续登录失败超过%d次,已被封禁", maxLoginFails))
+		return sysUser, clientIP, false
 	}
 
 	if !utils.IsChinaIP(clientIP) {
 		region, _ := utils.GetRegion(clientIP)
-		log.Printf("堡垒机拒绝访问 - IP: %s, 用户: %s, 密码: %s, 原因: 非中国IP(%s)", clientIP, user, pass, region)
-		record(models.LoginResultFail, "非中国IP接入被拒绝", models.SysUser{})
+		fail(models.SysUser{}, fmt.Sprintf("非中国IP接入被拒绝(%s)", region))
+		return sysUser, clientIP, false
+	}
+
+	if err := models.DB.Where("user_name = ? AND status = '1'", user).First(&sysUser).Error; err != nil {
+		recordLoginFail(clientIP)
+		fail(models.SysUser{}, "用户不存在或已禁用")
+		return models.SysUser{}, clientIP, false
+	}
+	return sysUser, clientIP, true
+}
+
+// keyboardAuth keyboard-interactive 认证（OpenSSH 客户端默认优先使用）：
+// 同一轮 handler 内先问系统密码，已绑定 MFA 的用户紧接着追问动态码/恢复码，
+// 与 Web 端两步登录体验一致。不支持交互的脚本客户端走 password 方式的
+// 拼接格式（密码+动态码）。
+func keyboardAuth(ctx gliderssh.Context, challenge sshclient.KeyboardInteractiveChallenge) bool {
+	if challenge == nil {
 		return false
 	}
 
-	var sysUser models.SysUser
-	if err := models.DB.Where("user_name = ? AND status = '1'", user).First(&sysUser).Error; err != nil {
-		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 密码: %s, 原因: 用户不存在或已禁用", clientIP, user, pass)
-		recordLoginFail(clientIP)
-		record(models.LoginResultFail, "用户不存在或已禁用", models.SysUser{})
+	sysUser, clientIP, ok := authGuard(ctx)
+	if !ok {
 		return false
 	}
-	if !checkPassword(pass, sysUser.Password) {
-		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 密码: %s, 原因: 密码错误", clientIP, user, pass)
-		if banned := recordLoginFail(clientIP); banned {
+
+	fail := func(format string, args ...any) bool {
+		reason := fmt.Sprintf(format, args...)
+		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 原因: %s", clientIP, ctx.User(), reason)
+		recordBastionLogin(ctx.User(), sysUser.ID, sysUser.DeptId, models.LoginResultFail, reason, clientIP)
+		if recordLoginFail(clientIP) {
 			log.Printf("堡垒机IP封禁 - IP: %s, 连续登录失败超过%d次, 封禁%v", clientIP, maxLoginFails, loginBanDuration)
 		}
-		record(models.LoginResultFail, "密码错误", sysUser)
 		return false
 	}
+
+	// 第一问：系统密码（本层绝不把用户输入的口令写进日志）
+	answers, err := challenge("", "Ops-Go bastion password:", []string{"Password: "}, []bool{true})
+	if err != nil || len(answers) == 0 {
+		return false
+	}
+	if opsMfa.IsRequired() && sysUser.TotpEnabled != 1 {
+		return fail("系统已强制启用 MFA，请先登录 Web 端在「个人中心 → MFA 设置」完成绑定")
+	}
+	if !opsMfa.CheckPassword(answers[0], sysUser.Password) {
+		return fail("密码错误")
+	}
+
+	// 未绑定：密码通过即完成
+	if sysUser.TotpEnabled != 1 {
+		return markAuthSuccess(clientIP, ctx.User(), sysUser)
+	}
+
+	// 第二问：动态码或恢复码
+	answers, err = challenge("", "MFA code (or recovery code):", []string{"Verification code: "}, []bool{false})
+	if err != nil || len(answers) == 0 {
+		return fail("未输入动态验证码")
+	}
+	if !opsMfa.VerifyCode(&sysUser, strings.TrimSpace(answers[0])) {
+		return fail("动态验证码错误或已过期")
+	}
+	return markAuthSuccess(clientIP, ctx.User(), sysUser)
+}
+
+// passwordAuth SSH 'password' 方式认证：普通用户直接比对；
+// 已绑定 MFA 或强制策略按拼接格式「密码+6位动态码/恢复码」处理（兜底通道）
+func passwordAuth(ctx gliderssh.Context, pass string) bool {
+	sysUser, clientIP, ok := authGuard(ctx)
+	if !ok {
+		return false
+	}
+
+	res := opsMfa.AuthBastionPassword(&sysUser, pass)
+	if !res.OK {
+		reason := res.Reason
+		if sysUser.TotpEnabled == 1 && reason == "已启用 MFA，请输入「密码+6位动态码」或「密码+恢复码」" {
+			reason += "；或使用支持交互式的终端按提示分步输入"
+		}
+		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 口令: %s, 原因: %s", clientIP, ctx.User(), pass, reason)
+		recordBastionLogin(ctx.User(), sysUser.ID, sysUser.DeptId, models.LoginResultFail, reason, clientIP)
+		if recordLoginFail(clientIP) {
+			log.Printf("堡垒机IP封禁 - IP: %s, 连续登录失败超过%d次, 封禁%v", clientIP, maxLoginFails, loginBanDuration)
+		}
+		return false
+	}
+	return markAuthSuccess(clientIP, ctx.User(), sysUser)
+}
+
+// markAuthSuccess 认证成功收尾：日志不落口令明文，清除失败计数，写登录日志
+func markAuthSuccess(clientIP, user string, sysUser models.SysUser) bool {
 	log.Printf("堡垒机认证成功 - IP: %s, 用户: %s", clientIP, user)
 	clearLoginFails(clientIP)
-	record(models.LoginResultSuccess, "", sysUser)
+	recordBastionLogin(user, sysUser.ID, sysUser.DeptId, models.LoginResultSuccess, "", clientIP)
 	return true
 }
 
-func checkPassword(inputPass string, hashedPassword string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(inputPass))
-	if err != nil {
-		log.Println("密码校验失败：", err)
-		return false
-	}
-	return true
+func recordBastionLogin(user string, userId, deptId int, result int8, reason, clientIP string) {
+	// 堡垒机登录同样写入登录日志，便于和 Web 端合并做行为分析
+	logService.RecordLogin(logService.LoginLogEntry{
+		UserName: user,
+		UserId:   userId,
+		DeptId:   deptId,
+		Result:   result,
+		Reason:   reason,
+		Ip:       clientIP,
+		Platform: models.LoginSourceBastion,
+	})
 }

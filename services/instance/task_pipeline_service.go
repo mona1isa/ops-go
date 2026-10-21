@@ -17,7 +17,7 @@ func (s *TaskPipelineService) List(pageNum, pageSize int, name string) (models.P
 		if name != "" {
 			db = db.Where("name like ?", "%"+name+"%")
 		}
-		return db.Where("del_flag = ?", 0).Order("id desc")
+		return db.Where("del_flag = ?", "0").Order("id desc")
 	})
 	if err != nil {
 		return result, err
@@ -29,7 +29,7 @@ func (s *TaskPipelineService) List(pageNum, pageSize int, name string) (models.P
 			ids[i] = p.ID
 		}
 		var steps []models.OpsPipelineStep
-		models.DB.Where("pipeline_id IN ? AND del_flag = ?", ids, 0).Order("step_order asc").Find(&steps)
+		models.DB.Where("pipeline_id IN ? AND del_flag = ?", ids, "0").Order("step_order asc").Find(&steps)
 		stepMap := make(map[int][]models.OpsPipelineStep)
 		for _, step := range steps {
 			stepMap[step.PipelineId] = append(stepMap[step.PipelineId], step)
@@ -44,11 +44,11 @@ func (s *TaskPipelineService) List(pageNum, pageSize int, name string) (models.P
 // GetByID 根据ID查询编排（含步骤）
 func (s *TaskPipelineService) GetByID(id int) (*models.OpsTaskPipeline, error) {
 	var pipeline models.OpsTaskPipeline
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&pipeline).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&pipeline).Error; err != nil {
 		return nil, errors.New("编排不存在")
 	}
 	var steps []models.OpsPipelineStep
-	models.DB.Where("pipeline_id = ? AND del_flag = ?", id, 0).Order("step_order asc").Find(&steps)
+	models.DB.Where("pipeline_id = ? AND del_flag = ?", id, "0").Order("step_order asc").Find(&steps)
 	pipeline.Steps = steps
 	return &pipeline, nil
 }
@@ -74,7 +74,7 @@ func (s *TaskPipelineService) Edit(pipeline *models.OpsTaskPipeline) error {
 		return errors.New("编排ID不能为空")
 	}
 	var existing models.OpsTaskPipeline
-	if err := models.DB.Where("id = ? AND del_flag = ?", pipeline.ID, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", pipeline.ID, "0").First(&existing).Error; err != nil {
 		return errors.New("编排不存在")
 	}
 
@@ -108,10 +108,10 @@ func (s *TaskPipelineService) Edit(pipeline *models.OpsTaskPipeline) error {
 // Delete 删除编排
 func (s *TaskPipelineService) Delete(id int) error {
 	var existing models.OpsTaskPipeline
-	if err := models.DB.Where("id = ? AND del_flag = ?", id, 0).First(&existing).Error; err != nil {
+	if err := models.DB.Where("id = ? AND del_flag = ?", id, "0").First(&existing).Error; err != nil {
 		return errors.New("编排不存在")
 	}
-	if err := models.DB.Model(&existing).Update("del_flag", 1).Error; err != nil {
+	if err := models.DB.Model(&existing).Update("del_flag", "1").Error; err != nil {
 		return errors.New("删除失败")
 	}
 	return nil

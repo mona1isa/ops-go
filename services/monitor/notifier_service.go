@@ -29,7 +29,7 @@ func (n *NotifierService) enabledChannels(ids string) []models.OpsMonitorNotifyC
 			continue
 		}
 		var channel models.OpsMonitorNotifyChannel
-		if err := models.DB.Where("id = ? AND del_flag = ? AND enabled = ?", id, 0, "1").First(&channel).Error; err != nil {
+		if err := models.DB.Where("id = ? AND del_flag = ? AND enabled = ?", id, "0", "1").First(&channel).Error; err != nil {
 			log.Printf("告警通知渠道不可用 id=%d: %v", id, err)
 			continue
 		}

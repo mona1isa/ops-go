@@ -141,19 +141,20 @@ func AnalyzeLogin(days int) LoginOverview {
 		overview.SuccessRate = float64(overview.Success) / float64(total) * 100
 	}
 
-	// 按天分组：DATE() 函数在 MySQL 5.7/8 均可用
+	// 按天分组：MySQL 用 DATE_FORMAT，PostgreSQL 用 to_char（models.DayExpr）
 	type dayRow struct {
 		Date    string
 		Success int64
 		Fail    int64
 	}
 	var rows []dayRow
+	dayExpr := models.DayExpr("created_at")
 	models.DB.Table("sys_login_log").
-		Select("DATE_FORMAT(created_at, '%Y-%m-%d') as date, "+
+		Select(dayExpr+" as date, "+
 			"SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as success, "+
 			"SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as fail").
 		Where("created_at >= ?", since).
-		Group("DATE_FORMAT(created_at, '%Y-%m-%d')").
+		Group(dayExpr).
 		Order("date asc").Scan(&rows)
 	for _, row := range rows {
 		overview.Trend = append(overview.Trend, LoginTrendPoint{Date: row.Date, Success: row.Success, Fail: row.Fail})

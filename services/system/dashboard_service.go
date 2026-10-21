@@ -66,7 +66,7 @@ func (s *DashboardService) GetStats() (*DashboardStats, error) {
 
 	// 4. 危险命令规则数（启用的）
 	if err := models.DB.Model(&models.OpsDangerousCommand{}).
-		Where("is_enabled = ?", 1).Count(&stats.DangerousRuleCount).Error; err != nil {
+		Where("is_enabled = ?", int8(1)).Count(&stats.DangerousRuleCount).Error; err != nil {
 		return nil, fmt.Errorf("查询危险命令规则数失败: %w", err)
 	}
 
