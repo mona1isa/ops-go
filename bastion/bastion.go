@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1038,6 +1039,9 @@ func (h *HostStore) Refresh() {
 			IP:     instance.Ip,
 		}
 	}
+
+	// 查询没有 ORDER BY，MySQL/PostgreSQL 的返回顺序不保证，这里统一按 ID 升序展示
+	sort.Slice(h.hosts, func(i, j int) bool { return h.hosts[i].ID < h.hosts[j].ID })
 }
 
 func (h *HostStore) List() []Host { return h.hosts }
