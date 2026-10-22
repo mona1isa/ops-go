@@ -1,0 +1,20 @@
+# ops-go 运行日志按天切割
+# 安装：sudo cp deploy/logrotate-ops-go /etc/logrotate.d/ops-go
+# 立即验证：sudo logrotate -fv /etc/logrotate.d/ops-go
+#
+# 说明：
+# - 服务由 restart.sh 以 `nohup >> logs/ops-go.log` 启动，进程持有同一个文件描述符，
+#   因此必须用 copytruncate（切割后原地清空，无需重启进程或 reopen 信号）。
+# - logrotate.timer 每天 00:00 触发一次，daily + dateext 保证一天一个文件、文件名带日期。
+/home/ubuntu/workspace/ops-go/logs/ops-go.log {
+	su ubuntu ubuntu
+	daily
+	rotate 30
+	dateext
+	dateformat -%Y%m%d
+	copytruncate
+	compress
+	delaycompress
+	missingok
+	notifempty
+}
