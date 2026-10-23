@@ -1,0 +1,41 @@
+[Unit]
+Description=Ops-Go 企业运维管理系统（Web API + SSH 堡垒机）
+# 数据库与 Redis 都在远端，等网络真正可用再启动，避免开机时连不上库直接失败退出
+After=network-online.target
+Wants=network-online.target
+# 5 分钟内连续失败 5 次就不再自动重试（这两个限制属于 [Unit]，写在 [Service] 里会被忽略）
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+
+# 应用用 godotenv 从当前工作目录读 .env，堡垒机主机密钥也是相对路径
+# （cmd/bastion/hostkey.pem），WorkingDirectory 必须设置，否则启动即失败
+WorkingDirectory=/home/ubuntu/workspace/ops-go
+
+ExecStartPre=/bin/mkdir -p /home/ubuntu/workspace/ops-go/logs
+ExecStart=/home/ubuntu/workspace/ops-go/ops-go
+
+# .env 由应用自己解析，这里不重复注入，避免两处配置各说各话
+Restart=always
+RestartSec=3
+
+# 日志仍然写文件而不是进 journal：日志中心、logrotate、以及日常 grep 都按这个路径在工作，
+# 语义与原来的 `nohup ./ops-go >> logs/ops-go.log 2>&1` 一致（同一个 fd 追加写入，
+# logrotate 的 copytruncate 照旧生效）
+StandardOutput=append:/home/ubuntu/workspace/ops-go/logs/ops-go.log
+StandardError=append:/home/ubuntu/workspace/ops-go/logs/ops-go.log
+
+# 堡垒机同时承载 :2222 会话代理，停止时给在跑的会话留出收尾时间
+KillSignal=SIGTERM
+TimeoutStopSec=30
+SendSIGKILL=yes
+
+LimitNOFILE=65535
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

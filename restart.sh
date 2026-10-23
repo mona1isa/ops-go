@@ -6,6 +6,9 @@
 #   ./restart.sh stop     # 仅停止服务
 #   ./restart.sh start    # 仅启动服务（不做构建）
 #
+# 装了 systemd 单元（./deploy/install-systemd.sh）后，本脚本自动改走 systemctl，
+# 等价于「构建 + sudo systemctl restart ops-go」；没装则仍是原来的 nohup 后台启动。
+#
 # 注意：必须在 ops-go 目录下执行，godotenv.Load() 只会从当前工作目录读取 .env
 
 set -euo pipefail
@@ -19,8 +22,22 @@ LOG_FILE="$LOG_DIR/ops-go.log"
 WAIT_TIMEOUT=30
 
 # 读取服务端口（用于查找旧进程和启动健康检查）
-APP_PORT="$(grep -E '^APP_PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'")"
+# grep 无匹配会退出 1，配合 set -e / pipefail 会让脚本在这一行静默退出，故 || true 兜底
+APP_PORT="$(grep -E '^APP_PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'" || true)"
 APP_PORT="${APP_PORT:-8080}"
+
+# 装了 systemd 单元（deploy/install-systemd.sh）就一律走 systemctl，避免手工后台进程
+# 和服务单元同时存在、互相抢端口；否则退回原来的 nohup 方式
+UNIT_DST="/etc/systemd/system/$BINARY.service"
+USE_SYSTEMD=0
+if [[ -f "$UNIT_DST" ]] && command -v systemctl >/dev/null 2>&1; then
+	USE_SYSTEMD=1
+fi
+
+run_systemctl() {
+	# 不定义成同名函数以免遮蔽外部命令；这里统一加 sudo
+	sudo systemctl "$@"
+}
 
 log() {
 	echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -65,6 +82,11 @@ collect_pids() {
 
 stop_service() {
 	local pids pid waited
+	if [[ $USE_SYSTEMD -eq 1 ]]; then
+		log "走 systemd：停止 $BINARY.service"
+		run_systemctl stop "$BINARY"
+		return 0
+	fi
 	# collect_pids 在“无进程”时会因 grep 无匹配返回非 0，配合 set -e / pipefail
 	# 会让脚本静默退出，导致后续 build/start 不执行
 	pids="$(collect_pids || true)"
@@ -115,15 +137,25 @@ build_service() {
 
 start_service() {
 	mkdir -p "$LOG_DIR"
-	log "启动服务，端口：$APP_PORT，日志：$LOG_FILE"
-	nohup "./$BINARY" >>"$LOG_FILE" 2>&1 &
-	local new_pid=$!
+	local new_pid=""
+	if [[ $USE_SYSTEMD -eq 1 ]]; then
+		log "走 systemd：启动 $BINARY.service（日志仍写入 $LOG_FILE）"
+		run_systemctl start "$BINARY"
+	else
+		log "启动服务，端口：$APP_PORT，日志：$LOG_FILE"
+		nohup "./$BINARY" >>"$LOG_FILE" 2>&1 &
+		new_pid=$!
+	fi
 
 	# 等待端口监听
 	local waited=0
 	while [[ $waited -lt $WAIT_TIMEOUT ]]; do
 		if command -v ss >/dev/null 2>&1 && ss -ltnH "sport = :$APP_PORT" 2>/dev/null | grep -q LISTEN; then
-			log "服务启动成功（PID $new_pid）"
+			if [[ $USE_SYSTEMD -eq 1 ]]; then
+				log "服务启动成功（PID $(run_systemctl show -p MainPID --value "$BINARY")）"
+			else
+				log "服务启动成功（PID $new_pid）"
+			fi
 			return 0
 		fi
 		sleep 1
@@ -131,6 +163,7 @@ start_service() {
 	done
 
 	log "服务启动超时，请检查日志：$LOG_FILE"
+	[[ $USE_SYSTEMD -eq 1 ]] && run_systemctl status "$BINARY" --no-pager | tail -n 10
 	tail -n 20 "$LOG_FILE" || true
 	exit 1
 }

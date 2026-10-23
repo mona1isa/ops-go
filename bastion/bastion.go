@@ -1062,7 +1062,9 @@ func keyboardAuth(ctx gliderssh.Context, challenge sshclient.KeyboardInteractive
 	}
 
 	// 第一问：系统密码（本层绝不把用户输入的口令写进日志）
-	answers, err := challenge("", "Ops-Go bastion password:", []string{"Password: "}, []bool{true})
+	// echo 必须为 false：SSH 协议里这个标志由服务端逐 prompt 下发，告诉客户端「把用户敲的字符
+	// 显示到屏幕上」。传 true 时 OpenSSH/PuTTY 会把口令明文回显，传 false 才会按惯例隐藏输入
+	answers, err := challenge("", "Ops-Go bastion password:", []string{"Password: "}, []bool{false})
 	if err != nil || len(answers) == 0 {
 		return false
 	}
@@ -1103,7 +1105,7 @@ func passwordAuth(ctx gliderssh.Context, pass string) bool {
 		if sysUser.TotpEnabled == 1 && reason == "已启用 MFA，请输入「密码+6位动态码」或「密码+恢复码」" {
 			reason += "；或使用支持交互式的终端按提示分步输入"
 		}
-		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 口令: %s, 原因: %s", clientIP, ctx.User(), pass, reason)
+		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 原因: %s", clientIP, ctx.User(), reason)
 		recordBastionLogin(ctx.User(), sysUser.ID, sysUser.DeptId, models.LoginResultFail, reason, clientIP)
 		if recordLoginFail(clientIP) {
 			log.Printf("堡垒机IP封禁 - IP: %s, 连续登录失败超过%d次, 封禁%v", clientIP, maxLoginFails, loginBanDuration)
