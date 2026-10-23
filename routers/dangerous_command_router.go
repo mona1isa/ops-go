@@ -16,5 +16,6 @@ func (*DangerousCommandRouter) Setup(r *gin.RouterGroup) {
 		group.POST("/edit", controller.EditHandler)
 		group.DELETE("/rm/:id", controller.DeleteHandler)
 		group.POST("/changeStatus", controller.ChangeStatusHandler)
+		group.POST("/blockLog/list", controller.BlockLogListHandler)
 	}
 }

@@ -93,6 +93,7 @@ func MigrateTables() []interface{} {
 		&OpsUserInstanceAuth{},
 		&OpsUserInstanceKeyAuth{},
 		&OpsDangerousCommand{},
+		&OpsCommandBlockLog{},
 		&OpsTaskTemplate{},
 		&OpsTaskPipeline{},
 		&OpsPipelineStep{},

@@ -17,6 +17,9 @@ func main() {
 	// 注册 WebSocket 会话终止器
 	instanceService.RegisterTerminator(instance.GetWebSocketTerminator())
 
+	// 初始化高危指令规则（内置规则入库 + 加载到内存缓存），必须在堡垒机启动前完成，
+	// 否则缓存为空，CheckCommand 会放行所有命令
+	instanceService.InitDangerousCommands()
 	// 启动堡垒机服务
 	go bastion.Init()
 	// 启动主机健康检查服务

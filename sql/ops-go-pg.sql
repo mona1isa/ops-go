@@ -1,5 +1,5 @@
--- Ops-Go PostgreSQL 初始化 DDL（由 cmd/pgdump 导出，共 39 张表）
--- 生成时间: 2026-10-21 18:01:36
+-- Ops-Go PostgreSQL 初始化 DDL（由 cmd/pgdump 导出，共 40 张表）
+-- 生成时间: 2026-10-23 10:39:27
 -- 执行: psql -v ON_ERROR_STOP=1 -U <user> -d <dbname> -f ops-go-pg.sql
 -- 说明: 应用启动时 GORM AutoMigrate 也会建表，本文件供全新环境一键初始化
 
@@ -175,6 +175,45 @@ COMMENT ON COLUMN "ops_cmdb_tag"."update_by" IS '修改人ID';
 COMMENT ON COLUMN "ops_cmdb_tag"."del_flag" IS '删除标识（0正常 1 已删除）';
 COMMENT ON COLUMN "ops_cmdb_tag"."remark" IS '备注';
 CREATE UNIQUE INDEX uk_cmdb_tag_name ON public.ops_cmdb_tag USING btree (name);
+
+DROP TABLE IF EXISTS "ops_command_block_log" CASCADE;
+CREATE SEQUENCE IF NOT EXISTS "ops_command_block_log_id_seq" AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE;
+CREATE TABLE "ops_command_block_log" (
+    "id" bigint NOT NULL,
+    "session_id" character varying(64),
+    "channel" smallint DEFAULT 1,
+    "user_id" bigint,
+    "user_name" character varying(32),
+    "instance_id" bigint,
+    "instance_name" character varying(32),
+    "instance_ip" character varying(32),
+    "key_user" character varying(32),
+    "command" character varying(1000),
+    "normalized" character varying(1000),
+    "rule_id" bigint,
+    "rule_name" character varying(64),
+    "created_at" timestamp with time zone NOT NULL
+);
+ALTER SEQUENCE "ops_command_block_log_id_seq" OWNED BY "ops_command_block_log"."id";
+ALTER TABLE "ops_command_block_log" ALTER COLUMN "id" SET DEFAULT nextval('ops_command_block_log_id_seq'::regclass);
+COMMENT ON COLUMN "ops_command_block_log"."session_id" IS '会话ID';
+COMMENT ON COLUMN "ops_command_block_log"."channel" IS '接入渠道 1 SSH堡垒机 2 Web终端';
+COMMENT ON COLUMN "ops_command_block_log"."user_id" IS '平台用户ID';
+COMMENT ON COLUMN "ops_command_block_log"."user_name" IS '平台登录名';
+COMMENT ON COLUMN "ops_command_block_log"."instance_id" IS '主机ID';
+COMMENT ON COLUMN "ops_command_block_log"."instance_name" IS '主机名称';
+COMMENT ON COLUMN "ops_command_block_log"."instance_ip" IS '主机IP';
+COMMENT ON COLUMN "ops_command_block_log"."key_user" IS '远端登录账号';
+COMMENT ON COLUMN "ops_command_block_log"."command" IS '被拦截的命令原文';
+COMMENT ON COLUMN "ops_command_block_log"."normalized" IS '归一化后命中规则的形态';
+COMMENT ON COLUMN "ops_command_block_log"."rule_id" IS '命中的规则ID';
+COMMENT ON COLUMN "ops_command_block_log"."rule_name" IS '命中的规则名称';
+COMMENT ON COLUMN "ops_command_block_log"."created_at" IS '拦截时间';
+CREATE INDEX idx_ops_command_block_log_created_at ON public.ops_command_block_log USING btree (created_at);
+CREATE INDEX idx_ops_command_block_log_instance_id ON public.ops_command_block_log USING btree (instance_id);
+CREATE INDEX idx_ops_command_block_log_rule_id ON public.ops_command_block_log USING btree (rule_id);
+CREATE INDEX idx_ops_command_block_log_session_id ON public.ops_command_block_log USING btree (session_id);
+CREATE INDEX idx_ops_command_block_log_user_id ON public.ops_command_block_log USING btree (user_id);
 
 DROP TABLE IF EXISTS "ops_dangerous_command" CASCADE;
 CREATE SEQUENCE IF NOT EXISTS "ops_dangerous_command_id_seq" AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE;
@@ -1191,6 +1230,7 @@ ALTER TABLE "ops_cmdb_change_log" ADD CONSTRAINT "ops_cmdb_change_log_pkey" PRIM
 ALTER TABLE "ops_cmdb_relation" ADD CONSTRAINT "ops_cmdb_relation_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_cmdb_subnet" ADD CONSTRAINT "ops_cmdb_subnet_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_cmdb_tag" ADD CONSTRAINT "ops_cmdb_tag_pkey" PRIMARY KEY (id);
+ALTER TABLE "ops_command_block_log" ADD CONSTRAINT "ops_command_block_log_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_dangerous_command" ADD CONSTRAINT "ops_dangerous_command_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_execution_hosts" ADD CONSTRAINT "ops_execution_hosts_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_group" ADD CONSTRAINT "ops_group_pkey" PRIMARY KEY (id);

@@ -131,3 +131,35 @@ func (c *DangerousCommandController) ChangeStatusHandler(ctx *gin.Context) {
 
 	c.JustSuccess(ctx)
 }
+
+// BlockLogListHandler 分页查询高危指令拦截记录
+func (c *DangerousCommandController) BlockLogListHandler(ctx *gin.Context) {
+	request := api.CommandBlockLogPageRequest{}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		c.Failure(ctx, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if request.PageNum == 0 {
+		request.PageNum = 1
+	}
+	if request.PageSize == 0 {
+		request.PageSize = 10
+	}
+
+	service := instance.DangerousCommandService{}
+	result, err := service.BlockLogList(instance.BlockLogQuery{
+		PageNum:      request.PageNum,
+		PageSize:     request.PageSize,
+		UserName:     request.UserName,
+		RuleName:     request.RuleName,
+		InstanceName: request.InstanceName,
+		SessionID:    request.SessionID,
+	})
+	if err != nil {
+		c.Failure(ctx, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.PageSuccess(ctx, result.Data, result.Total, result.TotalPage, result.PageNum, result.PageSize)
+}

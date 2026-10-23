@@ -3,15 +3,16 @@ package instance
 import (
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/zhany/ops-go/bastion"
 	"github.com/zhany/ops-go/controllers"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
-	"github.com/zhany/ops-go/services/instance"
+	"net/http"
+	// 本控制器自身也叫 instance 包，且函数内有名为 instance 的主机变量，
+	// 故按 main.go 的既有惯例给服务包起别名
+	instanceService "github.com/zhany/ops-go/services/instance"
 	"github.com/zhany/ops-go/utils"
 	"golang.org/x/crypto/ssh"
 	"io"
@@ -52,11 +53,11 @@ type SSHSession struct {
 	InstanceId    int
 	UserId        int
 	KeyId         int
-	Recorder      *utils.SessionRecorder // 会话录制器
-	SessionRecord *models.OpsSessionRecord // 会话记录
-	WebSocketConn *websocket.Conn        // WebSocket 连接引用（用于发送终止消息）
-	InputBuffer   string                 // 用户输入缓冲区（用于高危指令拦截）
-	IsAdmin       bool                   // 是否为管理员
+	Recorder      *utils.SessionRecorder     // 会话录制器
+	SessionRecord *models.OpsSessionRecord   // 会话记录
+	WebSocketConn *websocket.Conn            // WebSocket 连接引用（用于发送终止消息）
+	Guard         *instanceService.LineGuard // 高危指令拦截（含输入缓冲），与 SSH 堡垒机共用同一实现
+	IsAdmin       bool                       // 是否为管理员
 	mu            sync.Mutex
 }
 
@@ -145,7 +146,7 @@ func (c *WebSocketController) WebSocketHandler(ctx *gin.Context) {
 	isAdmin := userId == controllers.AdminUserId
 
 	// 获取用户在该主机上可使用的凭证（主机级授权 + 分组级授权，管理员为主机绑定的凭证）
-	keys, err := instance.GetUserAvailableKeys(userId, instanceId, isAdmin)
+	keys, err := instanceService.GetUserAvailableKeys(userId, instanceId, isAdmin)
 	if err != nil {
 		c.sendError(conn, "获取凭证失败: "+err.Error())
 		return
@@ -372,7 +373,17 @@ func (c *WebSocketController) connectToInstance(conn *websocket.Conn, sessionID 
 		Recorder:      recorder,
 		SessionRecord: sessionRecord,
 		WebSocketConn: conn, // 保存 WebSocket 连接引用
-		IsAdmin:       isAdmin,
+		Guard: instanceService.NewLineGuard(instanceService.AuditContext{
+			SessionID:    sessionID,
+			Channel:      models.BlockChannelWebTerm,
+			UserID:       userId,
+			UserName:     userName,
+			InstanceID:   instanceId,
+			InstanceName: instance.Name,
+			InstanceIP:   instance.Ip,
+			KeyUser:      key.User,
+		}, isAdmin),
+		IsAdmin: isAdmin,
 	}
 
 	sessionMutex.Lock()
@@ -430,7 +441,7 @@ func (c *WebSocketController) readSSHOutput(conn *websocket.Conn, sessionID stri
 		}
 		if n > 0 {
 			data := string(buf[:n])
-			
+
 			// 录制输出数据
 			if sshSession.Recorder != nil {
 				if err := sshSession.Recorder.RecordOutput(data); err != nil {
@@ -489,88 +500,20 @@ func (c *WebSocketController) handleData(sessionID string, msg WebSocketMessage)
 
 	data := msg.Data
 
-	// 如果数据包含 Escape 序列（方向键、Home、End 等），不进入buffer
-	if strings.Contains(data, "\x1b") {
-		if _, err := sshSession.StdinPipe.Write([]byte(data)); err != nil {
-			log.Printf("写入SSH输入失败: %v", err)
+	toRemote, hits := sshSession.Guard.Feed(data)
+	for _, hit := range hits {
+		sshSession.Guard.Record(hit)
+		// 拦截提示走独立的 blocked 消息类型，前端按类型渲染
+		if err := sshSession.WebSocketConn.WriteJSON(WebSocketMessage{
+			Type: "blocked",
+			Data: hit.WarningText(),
+		}); err != nil {
+			log.Printf("发送拦截警告失败: %v", err)
 		}
-		return
 	}
-
-	// 逐个字符处理
-	for i := 0; i < len(data); i++ {
-		ch := data[i]
-		switch ch {
-		case '\r', '\n':
-			// 回车/换行，提取完整命令并检查
-			cmd := strings.TrimSpace(sshSession.InputBuffer)
-			sshSession.InputBuffer = ""
-			if cmd == "" {
-				if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-				}
-				continue
-			}
-			// 检查高危指令
-			blocked, ruleName, description := instance.CheckCommand(cmd, sshSession.IsAdmin)
-			if blocked {
-				// 发送 Ctrl+C 取消当前输入
-				if _, err := sshSession.StdinPipe.Write([]byte{0x03}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-				}
-				// 发送警告到前端
-				warning := fmt.Sprintf("\r\n\x1b[31m[高危指令拦截] 命令 \"%s\" 已被系统阻止执行（规则：%s）\x1b[0m\r\n", cmd, ruleName)
-				if description != "" {
-					warning = fmt.Sprintf("\r\n\x1b[31m[高危指令拦截] 命令 \"%s\" 已被系统阻止执行（%s）\x1b[0m\r\n", cmd, description)
-				}
-				if err := sshSession.WebSocketConn.WriteJSON(WebSocketMessage{
-					Type: "blocked",
-					Data: warning,
-				}); err != nil {
-					log.Printf("发送拦截警告失败: %v", err)
-				}
-			} else {
-				if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-				}
-			}
-		case '\b', 0x7f:
-			// 退格键
-			if len(sshSession.InputBuffer) > 0 {
-				sshSession.InputBuffer = sshSession.InputBuffer[:len(sshSession.InputBuffer)-1]
-			}
-			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-				log.Printf("写入SSH输入失败: %v", err)
-			}
-		case 0x03:
-			// Ctrl+C，清空buffer
-			sshSession.InputBuffer = ""
-			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-				log.Printf("写入SSH输入失败: %v", err)
-			}
-		case 0x04:
-			// Ctrl+D
-			sshSession.InputBuffer = ""
-			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-				log.Printf("写入SSH输入失败: %v", err)
-			}
-		case 0x15:
-			// Ctrl+U，清空当前行
-			sshSession.InputBuffer = ""
-			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-				log.Printf("写入SSH输入失败: %v", err)
-			}
-		case '\t':
-			// Tab，忽略不进入buffer
-			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-				log.Printf("写入SSH输入失败: %v", err)
-			}
-		default:
-			// 普通字符，追加到buffer并发送给SSH
-			sshSession.InputBuffer += string(ch)
-			if _, err := sshSession.StdinPipe.Write([]byte{ch}); err != nil {
-				log.Printf("写入SSH输入失败: %v", err)
-			}
+	if len(toRemote) > 0 {
+		if _, err := sshSession.StdinPipe.Write(toRemote); err != nil {
+			log.Printf("写入SSH输入失败: %v", err)
 		}
 	}
 }

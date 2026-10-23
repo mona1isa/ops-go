@@ -34,8 +34,10 @@ var (
 func InitDangerousCommands() {
 	rulesOnce.Do(func() {
 		InitDangerousCommandMenu()
+		InitDangerousBlockLogMenu()
 		ReloadDangerousCommands()
 		InitBuiltinDangerousCommands()
+		startBlockLogWriter()
 	})
 }
 
@@ -78,40 +80,61 @@ func ReloadDangerousCommands() {
 // isAdmin: 是否为管理员（管理员直接放行）
 // 返回: blocked(是否被拦截), ruleName(规则名称), description(规则描述)
 func CheckCommand(cmd string, isAdmin bool) (bool, string, string) {
+	blocked, _, ruleName, description, _ := CheckCommandDetailed(cmd, isAdmin)
+	return blocked, ruleName, description
+}
+
+// BlockHit 一次高危命中的完整信息，用于拦截留痕与终端提示
+type BlockHit struct {
+	RuleID      int
+	RuleName    string
+	Description string
+	Command     string // 用户原始输入
+	Normalized  string // 命中规则的那个归一化形态
+}
+
+// CheckCommandDetailed 与 CheckCommand 相同的判定，额外返回规则 ID 与命中形态。
+// 匹配前把命令展开成若干归一化形态（见 NormalizeCommand），因此 sudo / 多空格 /
+// 拆开的短选项 / 管道分号后的第二段 / bash -c 内联脚本都能被既有规则命中。
+func CheckCommandDetailed(cmd string, isAdmin bool) (bool, int, string, string, string) {
 	if isAdmin {
-		return false, "", ""
+		return false, 0, "", "", ""
 	}
 
 	cmd = strings.TrimSpace(cmd)
 	if cmd == "" {
-		return false, "", ""
+		return false, 0, "", "", ""
 	}
 
 	rulesMutex.RLock()
 	rules := dangerousCommandRules
 	rulesMutex.RUnlock()
 
+	candidates := NormalizeCommand(cmd)
 	for _, rule := range rules {
 		if rule == nil {
 			continue
 		}
-		switch rule.MatchType {
-		case models.MatchTypeExact:
-			if cmd == rule.Pattern {
-				return true, rule.Name, rule.Description
-			}
-		case models.MatchTypePrefix:
-			if strings.HasPrefix(cmd, rule.Pattern) {
-				return true, rule.Name, rule.Description
-			}
-		case models.MatchTypeRegex:
-			if rule.Regex != nil && rule.Regex.MatchString(cmd) {
-				return true, rule.Name, rule.Description
+		for _, cand := range candidates {
+			if matchRule(rule, cand) {
+				return true, rule.ID, rule.Name, rule.Description, cand
 			}
 		}
 	}
 
-	return false, "", ""
+	return false, 0, "", "", ""
+}
+
+func matchRule(rule *DangerousCommandRule, cand string) bool {
+	switch rule.MatchType {
+	case models.MatchTypeExact:
+		return cand == rule.Pattern
+	case models.MatchTypePrefix:
+		return strings.HasPrefix(cand, rule.Pattern)
+	case models.MatchTypeRegex:
+		return rule.Regex != nil && rule.Regex.MatchString(cand)
+	}
+	return false
 }
 
 // DangerousCommandService 高危指令规则服务
@@ -232,6 +255,39 @@ func InitDangerousCommandMenu() {
 		return
 	}
 	log.Printf("高危指令管理菜单初始化完成，父菜单: %s(ID:%d)", parentMenu.Name, parentMenu.ID)
+}
+
+// InitDangerousBlockLogMenu 为「拦截记录」查询接口补按钮权限并授予管理员角色，
+// 否则非超管角色调用 /api/dangerousCommand/blockLog/list 会被 Casbin 拒掉
+func InitDangerousBlockLogMenu() {
+	var page models.SysMenu
+	if err := models.DB.Where("name = ? AND del_flag = ?", "高危指令管理", "0").First(&page).Error; err != nil {
+		log.Println("未找到高危指令管理菜单，跳过拦截记录按钮初始化")
+		return
+	}
+
+	var menu models.SysMenu
+	if err := models.DB.Where("name = ? AND del_flag = ?", "高危指令拦截记录", "0").First(&menu).Error; err == nil {
+		return // 已存在
+	}
+
+	menu = models.SysMenu{
+		Name:          "高危指令拦截记录",
+		ParentId:      page.ID,
+		OrderNum:      1,
+		Type:          "F",
+		Status:        true,
+		Perms:         "system:dangerousCommand:blockLog",
+		RequestUrl:    "/api/dangerousCommand/blockLog/list",
+		RequestMethod: "POST",
+	}
+	if err := models.DB.Create(&menu).Error; err != nil {
+		log.Printf("初始化高危指令拦截记录按钮失败: %v", err)
+		return
+	}
+	if err := models.DB.Create(&models.SysRoleMenu{RoleId: models.AdminUserId, MenuId: menu.ID}).Error; err != nil {
+		log.Printf("高危指令拦截记录按钮授权失败: %v", err)
+	}
 }
 
 // InitBuiltinDangerousCommands 初始化内置高危指令规则

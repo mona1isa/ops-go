@@ -590,14 +590,14 @@ func connectHostFlow(s gliderssh.Session, store *HostStore, sel string, reader *
 	isAdmin := store.userID == models.AdminUserId || store.user == "admin"
 
 	// 连接到远程主机
-	if err := proxyToRemote(s, host, selectedKey, credentials, keyAuthService.UserId, isAdmin); err != nil {
+	if err := proxyToRemote(s, host, selectedKey, credentials, keyAuthService.UserId, isAdmin, store.userID); err != nil {
 		fmt.Fprintf(s, "\n连接失败：%v\n", err)
 		return
 	}
 	fmt.Fprintln(s, "\n已从远程主机退出，返回堡垒机。")
 }
 
-func proxyToRemote(s gliderssh.Session, host *Host, key models.OpsKey, credentials string, userId int, isAdmin bool) error {
+func proxyToRemote(s gliderssh.Session, host *Host, key models.OpsKey, credentials string, userId int, isAdmin bool, platformUserID int) error {
 	// 生成会话ID
 	sessionID := generateSessionID(s.User(), host.ID)
 
@@ -722,7 +722,17 @@ func proxyToRemote(s gliderssh.Session, host *Host, key models.OpsKey, credentia
 		updateSessionRecordStatus(sessionID, models.SessionStatusAborted, 0)
 		return err
 	}
-	go handleBastionInput(s, stdinPipe, recorder, isAdmin)
+	guard := instance.NewLineGuard(instance.AuditContext{
+		SessionID:    sessionID,
+		Channel:      models.BlockChannelBastion,
+		UserID:       platformUserID,
+		UserName:     s.User(),
+		InstanceID:   host.ID,
+		InstanceName: host.Name,
+		InstanceIP:   host.IP,
+		KeyUser:      key.User,
+	}, isAdmin)
+	go handleBastionInput(s, stdinPipe, recorder, guard)
 
 	// 设置输出
 	stdout := newRecordingWriter(s, recorder, true)
@@ -851,10 +861,9 @@ func (w *recordingWriter) Write(p []byte) (int, error) {
 }
 
 // handleBastionInput 处理堡垒机输入，包含高危指令拦截
-func handleBastionInput(s gliderssh.Session, stdinPipe io.WriteCloser, recorder *utils.SessionRecorder, isAdmin bool) {
+func handleBastionInput(s gliderssh.Session, stdinPipe io.WriteCloser, recorder *utils.SessionRecorder, guard *instance.LineGuard) {
 	defer stdinPipe.Close()
 
-	var inputBuffer string
 	buf := make([]byte, 4096)
 
 	for {
@@ -878,95 +887,18 @@ func handleBastionInput(s gliderssh.Session, stdinPipe io.WriteCloser, recorder 
 			}
 		}
 
-		// 如果数据包含 Escape 序列（方向键、Home、End 等），不进入buffer
-		if strings.Contains(data, "\x1b") {
-			if _, err := stdinPipe.Write([]byte(data)); err != nil {
-				log.Printf("写入SSH输入失败: %v", err)
+		toRemote, hits := guard.Feed(data)
+		for _, hit := range hits {
+			guard.Record(hit)
+			if _, err := s.Write([]byte(hit.WarningText())); err != nil {
+				log.Printf("发送拦截警告失败: %v", err)
 				return
 			}
-			continue
 		}
-
-		// 逐个字符处理
-		for i := 0; i < len(data); i++ {
-			ch := data[i]
-			switch ch {
-			case '\r', '\n':
-				// 回车/换行，提取完整命令并检查
-				cmd := strings.TrimSpace(inputBuffer)
-				inputBuffer = ""
-				if cmd == "" {
-					if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-						log.Printf("写入SSH输入失败: %v", err)
-						return
-					}
-					continue
-				}
-				// 检查高危指令
-				blocked, ruleName, description := instance.CheckCommand(cmd, isAdmin)
-				if blocked {
-					// 发送 Ctrl+C 取消当前输入
-					if _, err := stdinPipe.Write([]byte{0x03}); err != nil {
-						log.Printf("写入SSH输入失败: %v", err)
-						return
-					}
-					// 发送警告到用户终端
-					warning := fmt.Sprintf("\r\n\x1b[31m[高危指令拦截] 命令 \"%s\" 已被系统阻止执行（规则：%s）\x1b[0m\r\n", cmd, ruleName)
-					if description != "" {
-						warning = fmt.Sprintf("\r\n\x1b[31m[高危指令拦截] 命令 \"%s\" 已被系统阻止执行（%s）\x1b[0m\r\n", cmd, description)
-					}
-					if _, err := s.Write([]byte(warning)); err != nil {
-						log.Printf("发送拦截警告失败: %v", err)
-					}
-				} else {
-					if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-						log.Printf("写入SSH输入失败: %v", err)
-						return
-					}
-				}
-			case '\b', 0x7f:
-				// 退格键
-				if len(inputBuffer) > 0 {
-					inputBuffer = inputBuffer[:len(inputBuffer)-1]
-				}
-				if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-					return
-				}
-			case 0x03:
-				// Ctrl+C，清空buffer
-				inputBuffer = ""
-				if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-					return
-				}
-			case 0x04:
-				// Ctrl+D
-				inputBuffer = ""
-				if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-					return
-				}
-			case 0x15:
-				// Ctrl+U，清空当前行
-				inputBuffer = ""
-				if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-					return
-				}
-			case '\t':
-				// Tab，忽略不进入buffer
-				if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-					return
-				}
-			default:
-				// 普通字符，追加到buffer并发送给SSH
-				inputBuffer += string(ch)
-				if _, err := stdinPipe.Write([]byte{ch}); err != nil {
-					log.Printf("写入SSH输入失败: %v", err)
-					return
-				}
+		if len(toRemote) > 0 {
+			if _, err := stdinPipe.Write(toRemote); err != nil {
+				log.Printf("写入SSH输入失败: %v", err)
+				return
 			}
 		}
 	}

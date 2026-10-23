@@ -1,5 +1,5 @@
--- Ops-Go 数据库初始化 DDL（由 cmd/sqldump 从运行库导出，共 39 张表）
--- 生成时间: 2026-10-20 17:03:37
+-- Ops-Go 数据库初始化 DDL（由 cmd/sqldump 从运行库导出，共 40 张表）
+-- 生成时间: 2026-10-20 17:03:37（ops_command_block_log 为 2026-10-23 手工补入：运行库已切到 PostgreSQL，cmd/sqldump 只认 MySQL DSN，下次连到 MySQL 运行库时重新导出即可覆盖）
 -- 执行: mysql -u<user> -p < ops-go.sql
 -- 说明: 应用启动时 GORM AutoMigrate 也会建表，本文件供全新环境一键初始化
 
@@ -118,6 +118,30 @@ CREATE TABLE `ops_cmdb_tag` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_cmdb_tag_name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `ops_command_block_log`;
+CREATE TABLE `ops_command_block_log` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '会话ID',
+  `channel` smallint DEFAULT '1' COMMENT '接入渠道 1 SSH堡垒机 2 Web终端',
+  `user_id` bigint DEFAULT NULL COMMENT '平台用户ID',
+  `user_name` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '平台登录名',
+  `instance_id` bigint DEFAULT NULL COMMENT '主机ID',
+  `instance_name` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '主机名称',
+  `instance_ip` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '主机IP',
+  `key_user` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '远端登录账号',
+  `command` varchar(1000) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '被拦截的命令原文',
+  `normalized` varchar(1000) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '归一化后命中规则的形态',
+  `rule_id` bigint DEFAULT NULL COMMENT '命中的规则ID',
+  `rule_name` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '命中的规则名称',
+  `created_at` datetime(3) NOT NULL COMMENT '拦截时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_ops_command_block_log_session_id` (`session_id`),
+  KEY `idx_ops_command_block_log_user_id` (`user_id`),
+  KEY `idx_ops_command_block_log_instance_id` (`instance_id`),
+  KEY `idx_ops_command_block_log_rule_id` (`rule_id`),
+  KEY `idx_ops_command_block_log_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `ops_dangerous_command`;
 CREATE TABLE `ops_dangerous_command` (
