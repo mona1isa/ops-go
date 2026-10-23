@@ -10,6 +10,15 @@ import (
 // 一条 pattern 为 `rm -rf` 的前缀规则。归一化只做「额外候选形态」的展开，
 // 规则本身是否命中仍由规则的 match_type 决定。
 
+// shellReservedWords shell 保留字：它们出现在命令位置时，后面跟着的还是命令，
+// 不能像普通命令那样「走到真命令就停止下钻」。少了这一步，
+// `if [ -f x ]; then rm -rf /`、`! rm -rf /`、`for f in a; do rm -rf /; done` 都拦不住
+var shellReservedWords = map[string]bool{
+	"then": true, "else": true, "elif": true, "fi": true, "do": true, "done": true,
+	"in": true, "esac": true, "case": true, "select": true, "until": true,
+	"while": true, "for": true, "if": true, "!": true, "function": true,
+}
+
 // shellSeparators 顶层命令分隔符（引号内不算）
 const shellSeparators = ";|&\n\r(){}"
 
@@ -165,6 +174,12 @@ func joinToks(toks []cmdToken) string {
 	return strings.Join(parts, " ")
 }
 
+// collapseSpaces 把连续空白压成一个空格。引号内的内容参与 token 拼接后容易出现
+// `rm  -rf /data`（引号自带前导空格），不压缩的话 `rm -rf` 这类前缀规则匹配不上。
+func collapseSpaces(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
 // NormalizeCommand 返回一条命令参与高危匹配的全部候选形态，第一个始终是原始输入，
 // 以保证旧的精确匹配语义不被削弱。
 func NormalizeCommand(raw string) []string {
@@ -172,6 +187,7 @@ func NormalizeCommand(raw string) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, 16)
 	add := func(s string) bool {
+		s = collapseSpaces(s)
 		if s == "" || seen[s] || len(out) >= maxCandidates {
 			return false
 		}
@@ -221,6 +237,10 @@ func NormalizeCommand(raw string) []string {
 				if wrapperValueFlags[name] {
 					i++
 				}
+				continue
+			}
+			if shellReservedWords[name] {
+				// 保留字之后还是命令位置，继续往后展开
 				continue
 			}
 			if !commandWrappers[name] {
