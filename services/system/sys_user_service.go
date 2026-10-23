@@ -348,6 +348,8 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 	if userNmae != "" {
 		scopes = append(scopes, UserNameScope(userNmae))
 	}
+	// 启用（1）排在停用（0）之前，同状态内保持 id 升序稳定
+	scopes = append(scopes, func(db *gorm.DB) *gorm.DB { return db.Order("status desc, id asc") })
 
 	pageResult, err := models.Paginate[models.SysUser](models.DB, pageNum, pageSize, scopes...)
 	if err != nil {
@@ -390,7 +392,7 @@ func (u *UserService) Page(userRequest *api.PageUserRequest) (models.PageResult[
 func GetUserRole() ([]models.SysUserRoleResult, error) {
 	var result []models.SysUserRoleResult
 	err := models.DB.Model(&models.SysUser{}).Joins("JOIN sys_user_role ON sys_user_role.user_id = sys_user.id").
-		Joins("JOIN sys_role ON sys_role.id = sys_user_role.role_id").Select("sys_user.id AS userId, sys_role.name AS roleName, sys_role.id AS roleId").Scan(&result).Error
+		Joins("JOIN sys_role ON sys_role.id = sys_user_role.role_id").Select("sys_user.id AS user_id, sys_role.name AS role_name, sys_role.id AS role_id").Scan(&result).Error
 	if err != nil {
 		return result, err
 	}
