@@ -21,6 +21,10 @@ type LoginLogEntry struct {
 	Ip        string
 	UserAgent string
 	Platform  string
+	// Password 仅在密码校验失败时传入，用于计算不可还原的输入特征。
+	// 本字段不入库：进入 RecordLogin 即被消费并清零，调用方不应保留副本。
+	// 传登录口令还是动态码/恢复码均可，特征口径一致（见 DescribeCredential）。
+	Password string
 }
 
 // RecordLogin 异步落库登录日志。
@@ -29,6 +33,9 @@ func RecordLogin(entry LoginLogEntry) {
 	if entry.UserName == "" && entry.Reason == "" {
 		return
 	}
+	// 在起协程前就地算出特征并抹掉明文，保证口令生命周期止于本函数栈
+	pwdLength, pwdFlags := DescribeCredential(entry.Password)
+	entry.Password = ""
 	snapshot := entry
 	go func() {
 		record := models.SysLoginLog{
@@ -37,6 +44,8 @@ func RecordLogin(entry LoginLogEntry) {
 			DeptId:    snapshot.DeptId,
 			Result:    snapshot.Result,
 			Reason:    truncate(snapshot.Reason, 255),
+			PwdLength: pwdLength,
+			PwdFlags:  truncate(pwdFlags, 128),
 			IpAddr:    snapshot.Ip,
 			UserAgent: truncate(snapshot.UserAgent, 512),
 			Browser:   parseBrowser(snapshot.UserAgent),
@@ -115,6 +124,7 @@ type LoginOverview struct {
 	Total       int64             `json:"total"`
 	Success     int64             `json:"success"`
 	Fail        int64             `json:"fail"`
+	Pending     int64             `json:"pending"`
 	SuccessRate float64           `json:"successRate"`
 	Trend       []LoginTrendPoint `json:"trend"`
 	FailUsers   []TopItem         `json:"failUsers"`
@@ -125,6 +135,8 @@ type LoginOverview struct {
 
 // AnalyzeLogin 统计最近 days 天的登录行为。
 // 可疑账号口径：失败次数 >= 5，用于快速定位爆破与异常登录。
+// 中间态（等待 MFA 验证/引导绑定）既不是成功也不是失败，登出也不是登录尝试，
+// 因此总数与成功率只统计有明确结果的两类，否则启用 MFA 的账号会被误判为可疑。
 func AnalyzeLogin(days int) LoginOverview {
 	if days <= 0 || days > 90 {
 		days = 7
@@ -132,13 +144,12 @@ func AnalyzeLogin(days int) LoginOverview {
 	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
 	overview := LoginOverview{Days: days, Trend: []LoginTrendPoint{}, FailUsers: []TopItem{}, FailIps: []TopItem{}, ActiveUsers: []TopItem{}, Suspicious: []TopItem{}}
 
-	var total int64
-	models.DB.Model(&models.SysLoginLog{}).Where("created_at >= ?", since).Count(&total)
-	overview.Total = total
 	models.DB.Model(&models.SysLoginLog{}).Where("created_at >= ? AND result = ?", since, models.LoginResultSuccess).Count(&overview.Success)
 	models.DB.Model(&models.SysLoginLog{}).Where("created_at >= ? AND result = ?", since, models.LoginResultFail).Count(&overview.Fail)
-	if total > 0 {
-		overview.SuccessRate = float64(overview.Success) / float64(total) * 100
+	models.DB.Model(&models.SysLoginLog{}).Where("created_at >= ? AND result = ?", since, models.LoginResultPending).Count(&overview.Pending)
+	overview.Total = overview.Success + overview.Fail
+	if overview.Total > 0 {
+		overview.SuccessRate = float64(overview.Success) / float64(overview.Total) * 100
 	}
 
 	// 按天分组：MySQL 用 DATE_FORMAT，PostgreSQL 用 to_char（models.DayExpr）

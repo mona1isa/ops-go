@@ -1,5 +1,5 @@
 -- Ops-Go 数据库初始化 DDL（由 cmd/sqldump 从运行库导出，共 41 张表）
--- 生成时间: 2026-10-20 17:03:37（ops_command_block_log 为 2026-10-23 手工补入：运行库已切到 PostgreSQL，cmd/sqldump 只认 MySQL DSN，下次连到 MySQL 运行库时重新导出即可覆盖；ops_cert_alert_rule 为 2026-10-23 手工补入：证书到期告警功能新增表，重启后由 GORM AutoMigrate 建表）
+-- 生成时间: 2026-10-20 17:03:37（ops_command_block_log 为 2026-10-23 手工补入：运行库已切到 PostgreSQL，cmd/sqldump 只认 MySQL DSN，下次连到 MySQL 运行库时重新导出即可覆盖；ops_cert_alert_rule 为 2026-10-23 手工补入：证书到期告警功能新增表，重启后由 GORM AutoMigrate 建表；sys_login_log.pwd_length / pwd_flags 为 2026-10-26 手工补入：登录日志口令特征列，同样由 AutoMigrate 落地）
 -- 执行: mysql -u<user> -p < ops-go.sql
 -- 说明: 应用启动时 GORM AutoMigrate 也会建表，本文件供全新环境一键初始化
 
@@ -669,8 +669,10 @@ DROP TABLE IF EXISTS `sys_login_log`;
 CREATE TABLE `sys_login_log` (
   `user_name` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '登录用户名',
   `user_id` int DEFAULT '0' COMMENT '用户ID（用户不存在时为0）',
-  `result` tinyint DEFAULT '0' COMMENT '结果（0 失败 1 成功 2 登出）',
+  `result` tinyint DEFAULT '0' COMMENT '结果（0 失败 1 成功 2 登出 3 待验证）',
   `reason` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '失败原因',
+  `pwd_length` int DEFAULT '0' COMMENT '本次提交口令的字符数（仅失败记录，明文不入库）',
+  `pwd_flags` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '口令特征标记（首尾含空格/含全角字符等，不可还原为明文）',
   `ip_addr` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '来源IP',
   `location` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '来源IP归属（预留）',
   `user_agent` varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '客户端UA',

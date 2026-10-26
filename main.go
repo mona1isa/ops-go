@@ -46,6 +46,8 @@ func main() {
 	go logService.NewLogCollectorService().Start()
 	// 启动日志告警评估服务
 	go logService.NewLogAlertEvaluator().Start()
+	// 启动登录日志保留期清理服务（LOGIN_LOG_RETENTION_DAYS，默认 180 天，0 为永久保留）
+	go logService.NewLoginLogCleanupService().Start()
 	// 启动Web服务
 	r := routers.Init()
 	err := r.Run(":" + os.Getenv("APP_PORT"))

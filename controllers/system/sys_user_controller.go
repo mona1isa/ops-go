@@ -71,7 +71,7 @@ func (s *SysUserController) MfaLoginHandler(ctx *gin.Context) {
 	request.PreToken = strings.TrimSpace(request.PreToken)
 
 	service := system.MfaService{}
-	jwt, err := service.MfaLogin(request, ctx.ClientIP())
+	jwt, err := service.MfaLogin(request, ctx.ClientIP(), ctx.Request.UserAgent())
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"code": http.StatusBadRequest, "msg": err.Error()})
 		return

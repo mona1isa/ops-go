@@ -15,6 +15,7 @@ import (
 	"github.com/zhany/ops-go/mfa"
 	"github.com/zhany/ops-go/middleware"
 	"github.com/zhany/ops-go/models"
+	logService "github.com/zhany/ops-go/services/logs"
 	"github.com/zhany/ops-go/utils"
 	"github.com/zhany/ops-go/utils/totp"
 )
@@ -146,32 +147,33 @@ func (s *MfaService) CreatePreToken(userId int) (string, error) {
 	return preToken, nil
 }
 
-// VerifyPreToken 校验预票据与动态码/恢复码；成功返回用户 ID 并作废票据，失败累加尝试次数
-func (s *MfaService) VerifyPreToken(preToken, code, recovery string) (int, error) {
+// VerifyPreToken 校验预票据与动态码/恢复码；成功作废票据并返回用户，失败累加尝试次数。
+// user 与 err 可能同时非空：票据能定位到账号但校验失败时也返回 user，供登录日志记录身份。
+func (s *MfaService) VerifyPreToken(preToken, code, recovery string) (*models.SysUser, error) {
 	key := mfaPreKey(preToken)
 	val, err := utils.GetCache(key)
 	if err != nil || val == "" {
-		return 0, errors.New("登录会话已过期，请重新登录")
+		return nil, errors.New("登录会话已过期，请重新登录")
 	}
 	parts := strings.SplitN(val, ":", 2)
 	userId, err := strconv.Atoi(parts[0])
 	if err != nil || userId <= 0 {
 		utils.DelCache(key)
-		return 0, errors.New("登录票据异常，请重新登录")
+		return nil, errors.New("登录票据异常，请重新登录")
 	}
 	attempts := 0
 	if len(parts) > 1 {
 		attempts, _ = strconv.Atoi(parts[1])
 	}
-	if attempts >= mfaMaxAttempt {
-		utils.DelCache(key)
-		return 0, errors.New("验证失败次数过多，请重新登录")
-	}
 
 	var user models.SysUser
 	if err := models.DB.First(&user, userId).Error; err != nil || user.TotpEnabled != 1 {
 		utils.DelCache(key)
-		return 0, errors.New("用户状态异常，请重新登录")
+		return nil, errors.New("用户状态异常，请重新登录")
+	}
+	if attempts >= mfaMaxAttempt {
+		utils.DelCache(key)
+		return &user, errors.New("验证失败次数过多，请重新登录")
 	}
 
 	ok := false
@@ -185,17 +187,17 @@ func (s *MfaService) VerifyPreToken(preToken, code, recovery string) (int, error
 		attempts++
 		if attempts >= mfaMaxAttempt {
 			utils.DelCache(key)
-			return 0, errors.New("验证失败次数过多，请重新登录")
+			return &user, errors.New("验证失败次数过多，请重新登录")
 		}
 		utils.SetCache(key, fmt.Sprintf("%d:%d", userId, attempts), mfaPreTTL)
 		if usedRecovery {
-			return 0, errors.New("恢复码无效或已被使用")
+			return &user, errors.New("恢复码无效或已被使用")
 		}
-		return 0, errors.New("动态验证码错误")
+		return &user, errors.New("动态验证码错误")
 	}
 
 	utils.DelCache(key)
-	return userId, nil
+	return &user, nil
 }
 
 // IssueLoginToken 密码或 MFA 验证通过后的统一签发：JWT + sys_user_token 单条覆盖 + 登录信息更新
@@ -237,15 +239,40 @@ func IssueLoginToken(user models.SysUser, loginIP string) (string, error) {
 	return jwt, nil
 }
 
-// MfaLogin 登录第二步：验证通过后签发正式 token
-func (s *MfaService) MfaLogin(request api.MfaLoginRequest, loginIP string) (string, error) {
-	userId, err := s.VerifyPreToken(request.PreToken, request.Code, request.Recovery)
+// MfaLogin 登录第二步：校验动态码/恢复码并签发 token。
+// 两步都要留登录日志：第一步只写「密码通过，等待MFA验证」的待验证中间态，
+// 成功与失败都在此闭环，否则启用 MFA 的账号在行为分析里永远只有中间态记录。
+func (s *MfaService) MfaLogin(request api.MfaLoginRequest, loginIP, userAgent string) (string, error) {
+	user, err := s.VerifyPreToken(request.PreToken, request.Code, request.Recovery)
+	if user == nil {
+		// 票据已失效或定位不到账号，没有身份可留痕
+		return "", err
+	}
+	submitted := request.Code
+	if strings.TrimSpace(request.Recovery) != "" {
+		submitted = request.Recovery
+	}
+	result := int8(models.LoginResultSuccess)
+	reason := ""
+	if err != nil {
+		result = int8(models.LoginResultFail)
+		reason = err.Error()
+	} else {
+		submitted = "" // 校验通过的动态码不留任何特征
+	}
+	logService.RecordLogin(logService.LoginLogEntry{
+		UserName:  user.UserName,
+		UserId:    user.ID,
+		DeptId:    user.DeptId,
+		Result:    result,
+		Reason:    reason,
+		Ip:        loginIP,
+		UserAgent: userAgent,
+		Platform:  models.LoginSourceWeb,
+		Password:  submitted,
+	})
 	if err != nil {
 		return "", err
 	}
-	var user models.SysUser
-	if err := models.DB.First(&user, userId).Error; err != nil {
-		return "", errors.New("用户不存在")
-	}
-	return IssueLoginToken(user, loginIP)
+	return IssueLoginToken(*user, loginIP)
 }

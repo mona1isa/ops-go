@@ -52,7 +52,8 @@ func (u *UserService) BastionLogin(username string, password string) (string, er
 
 func (u *UserService) UserLogin(request api.LoginRequest) (*api.LoginResult, error) {
 	// 登录日志按「谁、何时、从哪、成功与否」留痕，异步写入不阻塞登录主链路
-	record := func(result int8, reason string, user models.SysUser) {
+	// credential 只在密码校验失败时传入，由日志层就地算成不可还原特征后丢弃
+	record := func(result int8, reason string, user models.SysUser, credential string) {
 		logService.RecordLogin(logService.LoginLogEntry{
 			UserName:  request.Username,
 			UserId:    user.ID,
@@ -62,6 +63,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (*api.LoginResult, err
 			Ip:        request.LoginIP,
 			UserAgent: request.UserAgent,
 			Platform:  models.LoginSourceWeb,
+			Password:  credential,
 		})
 	}
 
@@ -74,7 +76,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (*api.LoginResult, err
 		}
 		rs := captchaService.VerifyCaptcha(&capVal)
 		if !rs {
-			record(models.LoginResultFail, "验证码错误", models.SysUser{})
+			record(models.LoginResultFail, "验证码错误", models.SysUser{}, "")
 			return nil, errors.New("验证码错误")
 		}
 	}
@@ -83,19 +85,19 @@ func (u *UserService) UserLogin(request api.LoginRequest) (*api.LoginResult, err
 	var user models.SysUser
 	models.DB.First(&user, "user_name=?", username)
 	if user.UserName == "" && user.UserName == username {
-		record(models.LoginResultFail, "用户不存在", models.SysUser{})
+		record(models.LoginResultFail, "用户不存在", models.SysUser{}, "")
 		return nil, errors.New("用户不存在")
 	}
 
 	// 用户被禁用后不准登录
 	if strings.EqualFold(user.Status, "0") {
-		record(models.LoginResultFail, "用户被禁用", user)
+		record(models.LoginResultFail, "用户被禁用", user, "")
 		return nil, errors.New("用户被禁用，请联系管理员")
 	}
 
 	if err := u.CheckHashPassword(request.Password, user.Password); err != nil {
 		log.Println("密码错误：", err)
-		record(models.LoginResultFail, "密码错误", user)
+		record(models.LoginResultFail, "密码错误", user, request.Password)
 		return nil, errors.New("密码错误")
 	}
 
@@ -107,10 +109,11 @@ func (u *UserService) UserLogin(request api.LoginRequest) (*api.LoginResult, err
 			log.Println("生成MFA票据失败：", err)
 			return nil, err
 		}
-		record(models.LoginResultFail, "密码通过，等待MFA验证", user)
+		record(models.LoginResultPending, "密码通过，等待MFA验证", user, "")
 		return &api.LoginResult{MfaRequired: true, PreToken: preToken}, nil
 	}
 	if IsMfaRequired() {
+		record(models.LoginResultPending, "密码通过，需先绑定MFA", user, "")
 		return &api.LoginResult{BindRequired: true}, nil
 	}
 
@@ -118,7 +121,7 @@ func (u *UserService) UserLogin(request api.LoginRequest) (*api.LoginResult, err
 	if err != nil {
 		return nil, err
 	}
-	record(models.LoginResultSuccess, "", user)
+	record(models.LoginResultSuccess, "", user, "")
 	return &api.LoginResult{Token: jwt}, nil
 }
 

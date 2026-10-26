@@ -1015,7 +1015,7 @@ func authGuard(ctx gliderssh.Context) (sysUser models.SysUser, clientIP string, 
 
 	fail := func(u models.SysUser, reason string) {
 		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 原因: %s", clientIP, user, reason)
-		recordBastionLogin(user, u.ID, u.DeptId, models.LoginResultFail, reason, clientIP)
+		recordBastionLogin(user, u.ID, u.DeptId, models.LoginResultFail, reason, clientIP, "")
 	}
 
 	if isIPBanned(clientIP) {
@@ -1051,10 +1051,12 @@ func keyboardAuth(ctx gliderssh.Context, challenge sshclient.KeyboardInteractive
 		return false
 	}
 
+	// submitted 记录最近一次交互输入，仅用于算出口令特征后落日志（明文本身不外传）
+	var submitted string
 	fail := func(format string, args ...any) bool {
 		reason := fmt.Sprintf(format, args...)
 		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 原因: %s", clientIP, ctx.User(), reason)
-		recordBastionLogin(ctx.User(), sysUser.ID, sysUser.DeptId, models.LoginResultFail, reason, clientIP)
+		recordBastionLogin(ctx.User(), sysUser.ID, sysUser.DeptId, models.LoginResultFail, reason, clientIP, submitted)
 		if recordLoginFail(clientIP) {
 			log.Printf("堡垒机IP封禁 - IP: %s, 连续登录失败超过%d次, 封禁%v", clientIP, maxLoginFails, loginBanDuration)
 		}
@@ -1068,12 +1070,15 @@ func keyboardAuth(ctx gliderssh.Context, challenge sshclient.KeyboardInteractive
 	if err != nil || len(answers) == 0 {
 		return false
 	}
+	submitted = answers[0]
 	if opsMfa.IsRequired() && sysUser.TotpEnabled != 1 {
 		return fail("系统已强制启用 MFA，请先登录 Web 端在「个人中心 → MFA 设置」完成绑定")
 	}
 	if !opsMfa.CheckPassword(answers[0], sysUser.Password) {
 		return fail("密码错误")
 	}
+	// 密码已验证通过，抹掉特征来源，避免把正确口令的长度/特征也记进日志
+	submitted = ""
 
 	// 未绑定：密码通过即完成
 	if sysUser.TotpEnabled != 1 {
@@ -1085,6 +1090,7 @@ func keyboardAuth(ctx gliderssh.Context, challenge sshclient.KeyboardInteractive
 	if err != nil || len(answers) == 0 {
 		return fail("未输入动态验证码")
 	}
+	submitted = answers[0]
 	if !opsMfa.VerifyCode(&sysUser, strings.TrimSpace(answers[0])) {
 		return fail("动态验证码错误或已过期")
 	}
@@ -1106,7 +1112,7 @@ func passwordAuth(ctx gliderssh.Context, pass string) bool {
 			reason += "；或使用支持交互式的终端按提示分步输入"
 		}
 		log.Printf("堡垒机认证失败 - IP: %s, 用户: %s, 原因: %s", clientIP, ctx.User(), reason)
-		recordBastionLogin(ctx.User(), sysUser.ID, sysUser.DeptId, models.LoginResultFail, reason, clientIP)
+		recordBastionLogin(ctx.User(), sysUser.ID, sysUser.DeptId, models.LoginResultFail, reason, clientIP, pass)
 		if recordLoginFail(clientIP) {
 			log.Printf("堡垒机IP封禁 - IP: %s, 连续登录失败超过%d次, 封禁%v", clientIP, maxLoginFails, loginBanDuration)
 		}
@@ -1119,11 +1125,12 @@ func passwordAuth(ctx gliderssh.Context, pass string) bool {
 func markAuthSuccess(clientIP, user string, sysUser models.SysUser) bool {
 	log.Printf("堡垒机认证成功 - IP: %s, 用户: %s", clientIP, user)
 	clearLoginFails(clientIP)
-	recordBastionLogin(user, sysUser.ID, sysUser.DeptId, models.LoginResultSuccess, "", clientIP)
+	recordBastionLogin(user, sysUser.ID, sysUser.DeptId, models.LoginResultSuccess, "", clientIP, "")
 	return true
 }
 
-func recordBastionLogin(user string, userId, deptId int, result int8, reason, clientIP string) {
+// credential 为本次提交的口令/验证码原文，只用于计算不可还原的输入特征，不会入库
+func recordBastionLogin(user string, userId, deptId int, result int8, reason, clientIP, credential string) {
 	// 堡垒机登录同样写入登录日志，便于和 Web 端合并做行为分析
 	logService.RecordLogin(logService.LoginLogEntry{
 		UserName: user,
@@ -1133,5 +1140,6 @@ func recordBastionLogin(user string, userId, deptId int, result int8, reason, cl
 		Reason:   reason,
 		Ip:       clientIP,
 		Platform: models.LoginSourceBastion,
+		Password: credential,
 	})
 }

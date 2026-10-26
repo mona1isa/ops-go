@@ -1,5 +1,5 @@
 -- Ops-Go PostgreSQL 初始化 DDL（由 cmd/pgdump 导出，共 41 张表）
--- 生成时间: 2026-10-23 10:39:27（ops_cert_alert_rule 为 2026-10-23 手工补入：证书到期告警功能新增表，尚未在运行库落地，重启后由 GORM AutoMigrate 建表，届时可用 cmd/pgdump 重导覆盖）
+-- 生成时间: 2026-10-23 10:39:27（ops_cert_alert_rule 为 2026-10-23 手工补入：证书到期告警功能新增表，尚未在运行库落地，重启后由 GORM AutoMigrate 建表，届时可用 cmd/pgdump 重导覆盖；sys_login_log.pwd_length / pwd_flags 为 2026-10-26 手工补入：登录日志口令特征列，同样由 AutoMigrate 落地）
 -- 执行: psql -v ON_ERROR_STOP=1 -U <user> -d <dbname> -f ops-go-pg.sql
 -- 说明: 应用启动时 GORM AutoMigrate 也会建表，本文件供全新环境一键初始化
 
@@ -1083,6 +1083,8 @@ CREATE TABLE "sys_login_log" (
     "user_id" integer DEFAULT 0,
     "result" smallint DEFAULT 0,
     "reason" character varying(255),
+    "pwd_length" integer DEFAULT 0,
+    "pwd_flags" character varying(128),
     "ip_addr" character varying(64),
     "location" character varying(128),
     "user_agent" character varying(512),
@@ -1096,8 +1098,10 @@ ALTER SEQUENCE "sys_login_log_id_seq" OWNED BY "sys_login_log"."id";
 ALTER TABLE "sys_login_log" ALTER COLUMN "id" SET DEFAULT nextval('sys_login_log_id_seq'::regclass);
 COMMENT ON COLUMN "sys_login_log"."user_name" IS '登录用户名';
 COMMENT ON COLUMN "sys_login_log"."user_id" IS '用户ID（用户不存在时为0）';
-COMMENT ON COLUMN "sys_login_log"."result" IS '结果（0 失败 1 成功 2 登出）';
+COMMENT ON COLUMN "sys_login_log"."result" IS '结果（0 失败 1 成功 2 登出 3 待验证）';
 COMMENT ON COLUMN "sys_login_log"."reason" IS '失败原因';
+COMMENT ON COLUMN "sys_login_log"."pwd_length" IS '本次提交口令的字符数（仅失败记录，明文不入库）';
+COMMENT ON COLUMN "sys_login_log"."pwd_flags" IS '口令特征标记（首尾含空格/含全角字符等，不可还原为明文）';
 COMMENT ON COLUMN "sys_login_log"."ip_addr" IS '来源IP';
 COMMENT ON COLUMN "sys_login_log"."location" IS '来源IP归属（预留）';
 COMMENT ON COLUMN "sys_login_log"."user_agent" IS '客户端UA';
