@@ -15,6 +15,7 @@ func (*CmdbRouter) Setup(r *gin.RouterGroup) {
 	tag := cmdb.TagController{}
 	relation := cmdb.RelationController{}
 	subnet := cmdb.SubnetController{}
+	certAlert := cmdb.CertAlertController{}
 
 	group := r.Group("/cmdb")
 	{
@@ -45,5 +46,14 @@ func (*CmdbRouter) Setup(r *gin.RouterGroup) {
 		group.POST("/subnet/edit", subnet.EditHandler)
 		group.POST("/subnet/delete", subnet.DeleteHandler)
 		group.POST("/subnet/usage", subnet.UsageHandler)
+
+		group.POST("/cert/rule/page", certAlert.RulePageHandler)
+		group.POST("/cert/rule/add", certAlert.RuleAddHandler)
+		group.POST("/cert/rule/edit", certAlert.RuleEditHandler)
+		group.POST("/cert/rule/delete", certAlert.RuleDeleteHandler)
+		group.POST("/cert/rule/toggle", certAlert.RuleToggleHandler)
+		group.POST("/cert/rule/silence", certAlert.RuleSilenceHandler)
+		group.POST("/cert/expiring", certAlert.ExpiringHandler)
+		group.POST("/cert/events", certAlert.EventsHandler)
 	}
 }

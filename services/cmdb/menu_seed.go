@@ -52,6 +52,15 @@ var cmdbMenuSeeds = []cmdbMenuSeed{
 	{Name: "编辑网段", ParentKey: "ipam", OrderNum: 2, Type: "F", Perms: "cmdb:subnet:edit", RequestUrl: "/api/cmdb/subnet/edit", RequestMethod: "POST"},
 	{Name: "删除网段", ParentKey: "ipam", OrderNum: 3, Type: "F", Perms: "cmdb:subnet:delete", RequestUrl: "/api/cmdb/subnet/delete", RequestMethod: "POST"},
 	{Name: "网段使用情况", ParentKey: "ipam", OrderNum: 4, Type: "F", Perms: "cmdb:subnet:usage", RequestUrl: "/api/cmdb/subnet/usage", RequestMethod: "POST"},
+
+	{Name: "证书到期", Key: "certAlert", ParentKey: "cmdb", OrderNum: 5, Path: "/cmdb/certAlert", Component: "cmdb/certAlert/index", Type: "C", Icon: "ele-Ticket", Perms: "cmdb:cert:view", RequestUrl: "/api/cmdb/cert/expiring", RequestMethod: "POST"},
+	{Name: "证书告警规则列表", ParentKey: "certAlert", OrderNum: 1, Type: "F", Perms: "cmdb:cert:rule:list", RequestUrl: "/api/cmdb/cert/rule/page", RequestMethod: "POST"},
+	{Name: "新增证书告警规则", ParentKey: "certAlert", OrderNum: 2, Type: "F", Perms: "cmdb:cert:rule:add", RequestUrl: "/api/cmdb/cert/rule/add", RequestMethod: "POST"},
+	{Name: "编辑证书告警规则", ParentKey: "certAlert", OrderNum: 3, Type: "F", Perms: "cmdb:cert:rule:edit", RequestUrl: "/api/cmdb/cert/rule/edit", RequestMethod: "POST"},
+	{Name: "删除证书告警规则", ParentKey: "certAlert", OrderNum: 4, Type: "F", Perms: "cmdb:cert:rule:delete", RequestUrl: "/api/cmdb/cert/rule/delete", RequestMethod: "POST"},
+	{Name: "启停证书告警规则", ParentKey: "certAlert", OrderNum: 5, Type: "F", Perms: "cmdb:cert:rule:toggle", RequestUrl: "/api/cmdb/cert/rule/toggle", RequestMethod: "POST"},
+	{Name: "静默证书告警规则", ParentKey: "certAlert", OrderNum: 6, Type: "F", Perms: "cmdb:cert:rule:silence", RequestUrl: "/api/cmdb/cert/rule/silence", RequestMethod: "POST"},
+	{Name: "证书告警事件", ParentKey: "certAlert", OrderNum: 7, Type: "F", Perms: "cmdb:cert:events", RequestUrl: "/api/cmdb/cert/events", RequestMethod: "POST"},
 }
 
 // InitCmdbMenu 初始化资产管理菜单并授权给管理员角色。

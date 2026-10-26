@@ -1,5 +1,5 @@
--- Ops-Go PostgreSQL 初始化 DDL（由 cmd/pgdump 导出，共 40 张表）
--- 生成时间: 2026-10-23 10:39:27
+-- Ops-Go PostgreSQL 初始化 DDL（由 cmd/pgdump 导出，共 41 张表）
+-- 生成时间: 2026-10-23 10:39:27（ops_cert_alert_rule 为 2026-10-23 手工补入：证书到期告警功能新增表，尚未在运行库落地，重启后由 GORM AutoMigrate 建表，届时可用 cmd/pgdump 重导覆盖）
 -- 执行: psql -v ON_ERROR_STOP=1 -U <user> -d <dbname> -f ops-go-pg.sql
 -- 说明: 应用启动时 GORM AutoMigrate 也会建表，本文件供全新环境一键初始化
 
@@ -20,6 +20,42 @@ CREATE TABLE "casbin_rule" (
 ALTER SEQUENCE "casbin_rule_id_seq" OWNED BY "casbin_rule"."id";
 ALTER TABLE "casbin_rule" ALTER COLUMN "id" SET DEFAULT nextval('casbin_rule_id_seq'::regclass);
 CREATE UNIQUE INDEX idx_casbin_rule ON public.casbin_rule USING btree (ptype, v0, v1, v2, v3, v4, v5);
+
+DROP TABLE IF EXISTS "ops_cert_alert_rule" CASCADE;
+CREATE SEQUENCE IF NOT EXISTS "ops_cert_alert_rule_id_seq" AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE;
+CREATE TABLE "ops_cert_alert_rule" (
+    "name" character varying(128) NOT NULL,
+    "model_types" character varying(128),
+    "warning_days" integer DEFAULT 30,
+    "severity" smallint DEFAULT 2,
+    "cooldown_sec" integer DEFAULT 86400,
+    "silence_until" bigint DEFAULT 0,
+    "muted" character varying(1) DEFAULT '0'::character varying,
+    "channel_ids" character varying(255),
+    "enabled" character varying(1) DEFAULT '1'::character varying,
+    "id" bigint NOT NULL,
+    "created_at" timestamp with time zone,
+    "updated_at" timestamp with time zone,
+    "create_by" character varying(32),
+    "update_by" character varying(32),
+    "del_flag" character varying(1) DEFAULT '0'::character varying,
+    "remark" character varying(500)
+);
+ALTER SEQUENCE "ops_cert_alert_rule_id_seq" OWNED BY "ops_cert_alert_rule"."id";
+ALTER TABLE "ops_cert_alert_rule" ALTER COLUMN "id" SET DEFAULT nextval('ops_cert_alert_rule_id_seq'::regclass);
+COMMENT ON COLUMN "ops_cert_alert_rule"."name" IS '规则名称';
+COMMENT ON COLUMN "ops_cert_alert_rule"."model_types" IS '监控的资产模型类型(逗号分隔，如 ssl,domain；空为所有含到期时间的资产)';
+COMMENT ON COLUMN "ops_cert_alert_rule"."warning_days" IS '剩余天数小于等于该值触发预警';
+COMMENT ON COLUMN "ops_cert_alert_rule"."severity" IS '级别（1 紧急 2 警告 3 提醒）；已过期一律按紧急';
+COMMENT ON COLUMN "ops_cert_alert_rule"."cooldown_sec" IS '重复提醒冷却(秒)，证书类默认一天一次';
+COMMENT ON COLUMN "ops_cert_alert_rule"."silence_until" IS '静默截止时间(Unix秒)，0 表示不静默';
+COMMENT ON COLUMN "ops_cert_alert_rule"."muted" IS '静音（1 只记录事件不通知 0 正常）';
+COMMENT ON COLUMN "ops_cert_alert_rule"."channel_ids" IS '通知渠道ID列表(逗号分隔)';
+COMMENT ON COLUMN "ops_cert_alert_rule"."enabled" IS '启用状态（1 启用 0 停用）';
+COMMENT ON COLUMN "ops_cert_alert_rule"."create_by" IS '创建人ID';
+COMMENT ON COLUMN "ops_cert_alert_rule"."update_by" IS '修改人ID';
+COMMENT ON COLUMN "ops_cert_alert_rule"."del_flag" IS '删除标识（0正常 1 已删除）';
+COMMENT ON COLUMN "ops_cert_alert_rule"."remark" IS '备注';
 
 DROP TABLE IF EXISTS "ops_cmdb_asset" CASCADE;
 CREATE SEQUENCE IF NOT EXISTS "ops_cmdb_asset_id_seq" AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE;
@@ -1225,6 +1261,7 @@ ALTER TABLE "sys_user_token" ALTER COLUMN "id" SET DEFAULT nextval('sys_user_tok
 
 -- 主键 / 唯一约束
 ALTER TABLE "casbin_rule" ADD CONSTRAINT "casbin_rule_pkey" PRIMARY KEY (id);
+ALTER TABLE "ops_cert_alert_rule" ADD CONSTRAINT "ops_cert_alert_rule_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_cmdb_asset" ADD CONSTRAINT "ops_cmdb_asset_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_cmdb_change_log" ADD CONSTRAINT "ops_cmdb_change_log_pkey" PRIMARY KEY (id);
 ALTER TABLE "ops_cmdb_relation" ADD CONSTRAINT "ops_cmdb_relation_pkey" PRIMARY KEY (id);

@@ -114,6 +114,7 @@ func MigrateTables() []interface{} {
 		&OpsCmdbRelation{},
 		&OpsCmdbChangeLog{},
 		&OpsCmdbSubnet{},
+		&OpsCertAlertRule{},
 		&OpsSessionRecord{},
 	}
 }

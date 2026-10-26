@@ -30,6 +30,8 @@ func main() {
 	monitorService.InitMonitorMenu()
 	// 初始化资产管理菜单
 	cmdbService.InitCmdbMenu()
+	// 启动证书/域名到期告警评估服务（扫描资产到期时间，复用监控告警通知链路）
+	go cmdbService.NewCertAlertEvaluator().Start()
 	// 补齐主机管理批量导入按钮权限
 	instanceService.InitInstanceImportMenu()
 	// 启动主机指标采集服务

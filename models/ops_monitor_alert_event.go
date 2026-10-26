@@ -9,10 +9,11 @@ const (
 	AlertStatusResolved = 3 // 已恢复
 )
 
-// 告警来源：指标告警与日志告警共用同一张事件表，用来源区分便于各自筛选
+// 告警来源：指标告警、日志告警与证书到期告警共用同一张事件表，用来源区分便于各自筛选
 const (
 	AlertSourceMonitor = "monitor" // 指标告警
 	AlertSourceLog     = "log"     // 日志告警
+	AlertSourceCert    = "cert"    // 证书/域名到期告警
 )
 
 // OpsMonitorAlertEvent 告警事件记录

@@ -1,5 +1,5 @@
--- Ops-Go 数据库初始化 DDL（由 cmd/sqldump 从运行库导出，共 40 张表）
--- 生成时间: 2026-10-20 17:03:37（ops_command_block_log 为 2026-10-23 手工补入：运行库已切到 PostgreSQL，cmd/sqldump 只认 MySQL DSN，下次连到 MySQL 运行库时重新导出即可覆盖）
+-- Ops-Go 数据库初始化 DDL（由 cmd/sqldump 从运行库导出，共 41 张表）
+-- 生成时间: 2026-10-20 17:03:37（ops_command_block_log 为 2026-10-23 手工补入：运行库已切到 PostgreSQL，cmd/sqldump 只认 MySQL DSN，下次连到 MySQL 运行库时重新导出即可覆盖；ops_cert_alert_rule 为 2026-10-23 手工补入：证书到期告警功能新增表，重启后由 GORM AutoMigrate 建表）
 -- 执行: mysql -u<user> -p < ops-go.sql
 -- 说明: 应用启动时 GORM AutoMigrate 也会建表，本文件供全新环境一键初始化
 
@@ -19,6 +19,27 @@ CREATE TABLE `casbin_rule` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_casbin_rule` (`ptype`,`v0`,`v1`,`v2`,`v3`,`v4`,`v5`)
 ) ENGINE=InnoDB AUTO_INCREMENT=560 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `ops_cert_alert_rule`;
+CREATE TABLE `ops_cert_alert_rule` (
+  `name` varchar(128) COLLATE utf8mb4_general_ci NOT NULL COMMENT '规则名称',
+  `model_types` varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '监控的资产模型类型(逗号分隔，如 ssl,domain；空为所有含到期时间的资产)',
+  `warning_days` int DEFAULT '30' COMMENT '剩余天数小于等于该值触发预警',
+  `severity` tinyint DEFAULT '2' COMMENT '级别（1 紧急 2 警告 3 提醒）；已过期一律按紧急',
+  `cooldown_sec` int DEFAULT '86400' COMMENT '重复提醒冷却(秒)，证书类默认一天一次',
+  `silence_until` bigint DEFAULT '0' COMMENT '静默截止时间(Unix秒)，0 表示不静默',
+  `muted` varchar(1) COLLATE utf8mb4_general_ci DEFAULT '0' COMMENT '静音（1 只记录事件不通知 0 正常）',
+  `channel_ids` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '通知渠道ID列表(逗号分隔)',
+  `enabled` varchar(1) COLLATE utf8mb4_general_ci DEFAULT '1' COMMENT '启用状态（1 启用 0 停用）',
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(3) DEFAULT NULL,
+  `updated_at` datetime(3) DEFAULT NULL,
+  `create_by` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '创建人ID',
+  `update_by` varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '修改人ID',
+  `del_flag` varchar(1) COLLATE utf8mb4_general_ci DEFAULT '0' COMMENT '删除标识（0正常 1 已删除）',
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS `ops_cmdb_asset`;
 CREATE TABLE `ops_cmdb_asset` (
